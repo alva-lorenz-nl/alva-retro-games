@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The Old Laboratory - Alva & Herman</title>
+<style>
+  body {
+    background-color: #0f172a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 30px 15px;
+    display: flex;
+    justify-content: center;
+    color: #e2e8f0;
+  }
+  .frame {
+    max-width: 620px;
+    width: 100%;
+    background: #1e293b;
+    border-radius: 20px;
+    border: 1px solid #334155;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+  .canvas-wrap {
+    background: #090d16;
+    padding: 24px 10px 15px;
+    text-align: center;
+  }
+  @keyframes serverBlink {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+  @keyframes crtFlicker {
+    0%, 100% { opacity: 0.92; }
+    50% { opacity: 1; }
+  }
+  @keyframes dustFloat {
+    0% { transform: translateY(0px); opacity: 0.2; }
+    50% { transform: translateY(-8px); opacity: 0.6; }
+    100% { transform: translateY(0px); opacity: 0.2; }
+  }
+  .led-green { animation: serverBlink 1.4s infinite; }
+  .led-amber { animation: serverBlink 2.1s infinite 0.7s; }
+  .crt-screen { animation: crtFlicker 3s infinite ease-in-out; }
+  .sunbeam { opacity: 0.18; }
+  .desc-box {
+    padding: 28px 32px 34px;
+    line-height: 1.8;
+  }
+  .desc-box h2 {
+    margin-top: 0;
+    color: #93c5fd;
+    font-size: 19px;
+  }
+  .desc-box p {
+    color: #cbd5e1;
+    font-size: 14.5px;
+    margin: 12px 0;
+  }
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    background: #334155;
+    color: #94a3b8;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="canvas-wrap">
+      <svg width="560" height="340" viewBox="0 0 560 340" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- 阁楼红砖与拱形夜窗 -->
+        <rect width="560" height="340" fill="#141c2e"/>
+        <!-- 拱窗与破晓微光 -->
+        <path d="M 210 20 C 240 5 320 5 350 20 L 350 170 L 210 170 Z" fill="#1b2a47"/>
+        <path d="M 215 25 C 242 12 318 12 345 25 L 345 165 L 215 165 Z" fill="url(#dawnGlow)"/>
+        <!-- 窗棂格 -->
+        <line x1="280" y1="15" x2="280" y2="165" stroke="#0f172a" stroke-width="4"/>
+        <line x1="215" y1="95" x2="345" y2="95" stroke="#0f172a" stroke-width="3"/>
+
+        <!-- 窗外透入的第一缕晨光 -->
+        <polygon points="220,95 340,95 480,310 100,310" fill="url(#sunbeamGrad)" class="sunbeam"/>
+
+        <!-- 黑板与当年手绘的“永动轮”草图 -->
+        <rect x="25" y="40" width="155" height="100" rx="4" fill="#1a2e22" stroke="#4b382a" stroke-width="5"/>
+        <path d="M 50 85 Q 85 55 125 75 Q 150 95 110 115" stroke="#86efac" stroke-width="1.8" stroke-dasharray="3 3" fill="none"/>
+        <circle cx="100" cy="88" r="22" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 2" fill="none" opacity="0.7"/>
+        <line x1="100" y1="66" x2="100" y2="110" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+        <line x1="78" y1="88" x2="122" y2="88" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+        <text x="36" y="58" fill="#a7f3d0" font-size="10" font-family="monospace">HPC / Perpetual_Wheel</text>
+
+        <!-- 尽头的高性能计算原型机柜（带有嗡嗡作响的散热网与指示灯） -->
+        <rect x="430" y="50" width="105" height="230" rx="3" fill="#0b0f19" stroke="#334155" stroke-width="2"/>
+        <!-- 服务器层叠槽 -->
+        <rect x="438" y="70" width="89" height="24" fill="#161f30" stroke="#1e293b"/>
+        <rect x="438" y="100" width="89" height="24" fill="#161f30" stroke="#1e293b"/>
+        <rect x="438" y="130" width="89" height="24" fill="#161f30" stroke="#1e293b"/>
+        <rect x="438" y="160" width="89" height="24" fill="#161f30" stroke="#1e293b"/>
+        <!-- 闪烁的指示灯 -->
+        <circle cx="448" cy="82" r="2.5" fill="#22c55e" class="led-green"/>
+        <circle cx="456" cy="82" r="2.5" fill="#f59e0b" class="led-amber"/>
+        <circle cx="448" cy="112" r="2.5" fill="#22c55e" class="led-green"/>
+        <circle cx="448" cy="142" r="2.5" fill="#ef4444"/>
+        <circle cx="456" cy="142" r="2.5" fill="#22c55e" class="led-green"/>
+
+        <!-- 凌乱的地板与缆线 -->
+        <rect x="0" y="270" width="560" height="70" fill="#1e1b18"/>
+        <path d="M 170 300 Q 280 320 440 275" stroke="#0f172a" stroke-width="5" fill="none"/>
+        <path d="M 190 310 Q 310 295 435 285" stroke="#3b82f6" stroke-width="3" fill="none" opacity="0.6"/>
+
+        <!-- 左侧阿尔瓦的书桌：整洁、图纸、示波器、华夫饼 -->
+        <rect x="30" y="210" width="200" height="80" rx="3" fill="#452817"/>
+        <rect x="25" y="205" width="210" height="12" fill="#5c361e"/>
+        <!-- 示波器 -->
+        <rect x="45" y="150" width="65" height="55" rx="3" fill="#334155" stroke="#475569" stroke-width="2"/>
+        <rect x="52" y="158" width="40" height="32" rx="2" fill="#064e3b" class="crt-screen"/>
+        <!-- 绿色正弦波形 -->
+        <path d="M 54 174 Q 62 162 70 174 T 86 174" stroke="#4ade80" stroke-width="2" fill="none"/>
+        <!-- 旋钮 -->
+        <circle cx="101" cy="165" r="3" fill="#94a3b8"/>
+        <circle cx="101" cy="178" r="3" fill="#94a3b8"/>
+        <!-- 阿尔瓦的整齐笔记手稿 -->
+        <polygon points="120,185 160,182 165,205 125,205" fill="#f8fafc" stroke="#cbd5e1"/>
+        <line x1="126" y1="190" x2="154" y2="188" stroke="#94a3b8" stroke-width="1"/>
+        <line x1="127" y1="195" x2="155" y2="193" stroke="#94a3b8" stroke-width="1"/>
+        <!-- 白盘子里的华夫饼（赫尔曼带给阿尔瓦的甜食） -->
+        <ellipse cx="185" cy="198" rx="16" ry="6" fill="#e2e8f0"/>
+        <rect x="175" y="191" width="18" height="9" rx="2" fill="#d97706"/>
+        <line x1="179" y1="191" x2="179" y2="200" stroke="#b45309" stroke-width="1"/>
+        <line x1="185" y1="191" x2="185" y2="200" stroke="#b45309" stroke-width="1"/>
+
+        <!-- 右侧赫尔曼的书桌：杂乱、厚重的CRT显示器、冷咖啡 -->
+        <rect x="250" y="210" width="170" height="80" rx="3" fill="#3d2415"/>
+        <rect x="245" y="205" width="180" height="12" fill="#52311c"/>
+        <!-- 大屁股旧CRT电脑 -->
+        <rect x="260" y="145" width="68" height="60" rx="5" fill="#cbd5e1" stroke="#94a3b8" stroke-width="2"/>
+        <rect x="268" y="153" width="52" height="42" rx="4" fill="#022c22" class="crt-screen"/>
+        <!-- 屏幕代码光标 -->
+        <text x="272" y="172" fill="#22c55e" font-size="8" font-family="monospace">&gt; RUN sim_01</text>
+        <text x="272" y="184" fill="#86efac" font-size="7" font-family="monospace">CONVERGED.</text>
+        <!-- 赫尔曼喝了一半的马克杯（咖啡圈印子） -->
+        <rect x="340" y="186" width="14" height="18" rx="2" fill="#e2e8f0"/>
+        <path d="M 354 191 Q 360 195 354 200" stroke="#e2e8f0" stroke-width="2" fill="none"/>
+        <ellipse cx="347" cy="186" rx="6" ry="2" fill="#3f2716"/>
+
+        <!-- 赫尔曼的椅子搭着标志性的“绿色条纹西服外套” -->
+        <rect x="365" y="225" width="46" height="55" rx="6" fill="#14532d"/>
+        <!-- 绿色条纹暗纹 -->
+        <line x1="373" y1="225" x2="373" y2="280" stroke="#16a34a" stroke-width="2"/>
+        <line x1="381" y1="225" x2="381" y2="280" stroke="#16a34a" stroke-width="2"/>
+        <line x1="389" y1="225" x2="389" y2="280" stroke="#16a34a" stroke-width="2"/>
+        <line x1="397" y1="225" x2="397" y2="280" stroke="#16a34a" stroke-width="2"/>
+        <!-- 倚靠的椅背骨架 -->
+        <path d="M 360 220 L 416 220 L 410 290 L 366 290 Z" stroke="#0f172a" stroke-width="3" fill="none"/>
+
+      </svg>
+    </div>
+
+    <div class="desc-box">
+      <h2>莱顿老校区阁楼 · 永动轮实验室原型 (1998~2004)</h2>
+      <p>那时房间并不大，天花板低矮得常常碰头。靠墙矗立着整夜轰鸣的高性能运算原型机，地板上永远盘绕着示波器和传感器的数据排线。</p>
+      <p>右侧是赫尔曼的桌子，他习惯把那件<strong>墨绿色细条纹西装</strong>随手搭在转椅上，桌面散着喝了一半的浓咖啡；而左边是我的工位，演算草稿总是压得整整齐齐，盘子里往往还留着他从街角买来、哄我通宵时垫肚子的甜华夫饼。</p>
+      <div class="tag"># 莱顿大学阁楼</div>
+      <div class="tag"># 晨光与示波器</div>
+      <div class="tag"># 记忆里的旧西装</div>
+    </div>
+  </div>
+
+  <defs>
+    <linearGradient id="dawnGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="50%" stop-color="#3b4d75"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="sunbeamGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fef08a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</body>
+</html>

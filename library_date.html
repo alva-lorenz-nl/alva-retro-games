@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>莱顿旧书馆 · 暴雪之夜的初次约会</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #0d1117;
+    font-family: "PingFang SC", "Microsoft YaHei", "WenQuanYi Zen Hei", sans-serif;
+    overflow: hidden;
+  }
+  #wrap {
+    position: relative; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    box-shadow: 0 0 50px rgba(0,0,0,.9), 0 0 0 1px #2a3442;
+    max-width: 100%; max-height: 100%;
+  }
+  #hint {
+    position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
+    color: #e0d5be; font-size: 13px; letter-spacing: .08em;
+    background: rgba(13,17,23,.85); padding: 8px 18px; border-radius: 20px;
+    border: 1px solid #485b73; white-space: nowrap; pointer-events: none;
+    transition: opacity .5s;
+  }
+  #dialog {
+    position: absolute; left: 50%; bottom: 8%;
+    transform: translateX(-50%) translateY(10px);
+    width: min(650px, 90vw);
+    background: linear-gradient(180deg, #fdfbf7, #f1e9d8);
+    border: 2px solid #5a4632; border-radius: 8px;
+    padding: 16px 22px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.7);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+  #dialog.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+  #speaker {
+    font-size: 15px; font-weight: 700; color: #5c381c;
+    margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  #speaker::before {
+    content: "◆"; color: #8c5d31; font-size: 12px;
+  }
+  #text {
+    font-size: 15px; line-height: 1.8; color: #2c251e;
+    min-height: 54px; white-space: pre-wrap;
+  }
+  #next {
+    text-align: right; font-size: 12px; color: #887460;
+    margin-top: 6px;
+  }
+  #next.blink { animation: bl 1s infinite; }
+  @keyframes bl { 0%,100%{opacity:.3} 50%{opacity:1} }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="640" height="416"></canvas>
+  <div id="hint">WASD / 方向键 移动 · 靠近按 E 调查与倾听</div>
+  <div id="dialog">
+    <div id="speaker"></div>
+    <div id="text"></div>
+    <div id="next">E / 空格 继续</div>
+  </div>
+</div>
+<script>
+"use strict";
+
+const TILE = 32;
+const COLS = 20, ROWS = 13;
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function fit() {
+  const s = Math.min(window.innerWidth / cv.width, window.innerHeight / cv.height);
+  const k = Math.max(1, Math.floor(s));
+  cv.style.width = (cv.width * k) + 'px';
+  cv.style.height = (cv.height * k) + 'px';
+}
+window.addEventListener('resize', fit); fit();
+
+// 地图: #墙 .木地板 B大书架 b小书架 W挂着积雪的拱窗 T木桌 C木椅 F旧壁炉炉火 S长条破沙发
+const MAP = [
+  "####################",
+  "#W.W.BBBB..BBBB.W.W#",
+  "#....BBBB..BBBB....#",
+  "#..................#",
+  "#b..TT........TT..b#",
+  "#b..TT..S..S..TT..b#",
+  "#..................#",
+  "#....C........C....#",
+  "#..................#",
+  "#...b...F..F...b...#",
+  "#...b...FFFF...b...#",
+  "#..................#",
+  "####################"
+];
+
+function tileAt(c, r) {
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return '#';
+  return MAP[r][c];
+}
+function solid(c, r) {
+  const t = tileAt(c, r);
+  return t === '#' || t === 'B' || t === 'b' || t === 'T' || t === 'F' || t === 'S';
+}
+
+// 暴雪粒子效果
+const snow = [];
+for (let i = 0; i < 70; i++) {
+  snow.push({
+    x: Math.random() * cv.width,
+    y: Math.random() * cv.height,
+    r: Math.random() * 2 + 1,
+    spd: Math.random() * 1.5 + 0.8,
+    wind: Math.random() * 1.2 + 0.5
+  });
+}
+
+// 玩家：小白猫
+const player = {
+  x: 10 * TILE, y: 8 * TILE,
+  speed: 120,
+  dir: 'up',
+  step: 0
+};
+
+// 交互点
+const interactables = [
+  {
+    x: 9.5 * TILE, y: 5.5 * TILE, r: 48,
+    name: "裹在同一件大衣里的两人",
+    lines: [
+      "（旧沙发深陷下去。二十多岁的赫尔曼披着一件宽大厚重的深绿毛呢大衣，领口松垮地敞着）",
+      "（他伸长手臂，把身旁清瘦的灰白发青年连人带胳膊整整齐齐地裹进了大衣怀里）",
+      "年轻的阿尔瓦低声嘟囔：“……手拿开一点，赫尔曼。好挤，而且你的大衣上有好重的雪水味和旧书霉味。”",
+      "赫尔曼将额头抵在他冰凉的发侧，低低笑起来：“嫌挤？刚才在外面是谁冻得连手指都伸不直了？老实待着，把脚也收上来，别碰冷地板。”",
+      "（阿尔瓦抿着唇没有再推开，只是悄悄把冰凉的双手塞进了赫尔曼温热的毛衣口袋里）"
+    ]
+  },
+  {
+    x: 4.0 * TILE, y: 4.8 * TILE, r: 42,
+    name: "木桌上的热可可与旧书",
+    lines: [
+      "木桌上放着一罐还在冒热气的热可可，表面撒了厚厚一层肉桂粉，香气甜暖中带着微苦。",
+      "旁边摊开着一本被翻卷了边角的《控制系统工程导论》，扉页上歪歪扭扭地并排写着两个人的名字：Alva & Herman。",
+      "“老板只肯给一个杯子……你喝一大半，剩下的给我。”赫尔曼当时这么说。"
+    ]
+  },
+  {
+    x: 10.0 * TILE, y: 10.0 * TILE, r: 46,
+    name: "噼啪作响的旧壁炉",
+    lines: [
+      "铸铁小壁炉里炭火烧得正旺，木柴时不时爆出轻微的噼啪声，将昏黄温暖的光斑洒在两人的靴子边。",
+      "暴雪在阁楼窗外呼啸拍打，而屋里只有炉火的暖意，和两个人安静靠在一起的心跳声。"
+    ]
+  },
+  {
+    x: 2.0 * TILE, y: 1.5 * TILE, r: 40,
+    name: "积满积雪的拱形玻璃窗",
+    lines: [
+      "窗外是莱顿城铺天盖地的鹅毛大雪，运河水面已经结了冰，路灯在雪雾里化成模糊的暖黄光晕。",
+      "玻璃内侧起了一层厚厚的白雾，上面隐约能看到谁用手指随手画过的一只笨拙的小猫爪印。"
+    ]
+  }
+];
+
+// 输入
+const keys = {};
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
+  keys[k] = true;
+  if (k === 'e' || k === ' ') {
+    if (dialogOpen) advanceDialog();
+    else tryInteract();
+  }
+});
+window.addEventListener('keyup', e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// 对话框逻辑
+let dialogOpen = false;
+let curLines = [];
+let curLineIdx = 0;
+let curSpeaker = "";
+
+function openDialog(speaker, lines) {
+  curSpeaker = speaker;
+  curLines = lines;
+  curLineIdx = 0;
+  dialogOpen = true;
+  renderDialog();
+  document.getElementById('dialog').classList.add('show');
+}
+function advanceDialog() {
+  curLineIdx++;
+  if (curLineIdx >= curLines.length) {
+    dialogOpen = false;
+    document.getElementById('dialog').classList.remove('show');
+  } else {
+    renderDialog();
+  }
+}
+function renderDialog() {
+  document.getElementById('speaker').textContent = curSpeaker;
+  document.getElementById('text').textContent = curLines[curLineIdx];
+}
+
+function tryInteract() {
+  for (const it of interactables) {
+    const d = Math.hypot(player.x - it.x, player.y - it.y);
+    if (d < it.r) {
+      openDialog(it.name, it.lines);
+      return;
+    }
+  }
+}
+
+// 游戏循环
+let lastTime = performance.now();
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+
+  update(dt);
+  render();
+
+  requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  // 更新雪花
+  for (const s of snow) {
+    s.y += s.spd;
+    s.x += s.wind;
+    if (s.y > cv.height) { s.y = -5; s.x = Math.random() * cv.width; }
+    if (s.x > cv.width) s.x = -5;
+  }
+
+  if (dialogOpen) return;
+
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup']) dy -= 1;
+  if (keys['s'] || keys['arrowdown']) dy += 1;
+  if (keys['a'] || keys['arrowleft']) dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+
+  if (dx !== 0 && dy !== 0) {
+    dx *= 0.7071; dy *= 0.7071;
+  }
+
+  if (dx !== 0 || dy !== 0) {
+    player.step += dt * 8;
+    if (Math.abs(dx) > Math.abs(dy)) player.dir = dx > 0 ? 'right' : 'left';
+    else player.dir = dy > 0 ? 'down' : 'up';
+  }
+
+  const nx = player.x + dx * player.speed * dt;
+  const ny = player.y + dy * player.speed * dt;
+
+  // 碰撞检测
+  const margin = 8;
+  const c1 = Math.floor((nx - margin) / TILE);
+  const c2 = Math.floor((nx + margin) / TILE);
+  const r1 = Math.floor((player.y - margin) / TILE);
+  const r2 = Math.floor((player.y + margin) / TILE);
+  if (!solid(c1, r1) && !solid(c2, r1) && !solid(c1, r2) && !solid(c2, r2)) {
+    player.x = nx;
+  }
+
+  const c3 = Math.floor((player.x - margin) / TILE);
+  const c4 = Math.floor((player.x + margin) / TILE);
+  const r3 = Math.floor((ny - margin) / TILE);
+  const r4 = Math.floor((ny + margin) / TILE);
+  if (!solid(c3, r3) && !solid(c4, r3) && !solid(c3, r4) && !solid(c4, r4)) {
+    player.y = ny;
+  }
+
+  // 靠近提示
+  let near = false;
+  for (const it of interactables) {
+    if (Math.hypot(player.x - it.x, player.y - it.y) < it.r) {
+      near = true; break;
+    }
+  }
+  document.getElementById('hint').style.opacity = (near && !dialogOpen) ? "1" : "0.5";
+}
+
+function render() {
+  ctx.fillStyle = '#11171f';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  // 绘制地图
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * TILE, y = r * TILE;
+      const t = MAP[r][c];
+
+      // 地板
+      ctx.fillStyle = (c + r) % 2 === 0 ? '#433123' : '#3d2c1f';
+      ctx.fillRect(x, y, TILE, TILE);
+
+      if (t === '#') {
+        ctx.fillStyle = '#221a16';
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = '#17110e';
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+      } else if (t === 'W') {
+        // 窗户透出的暴雪夜色
+        ctx.fillStyle = '#1b2636';
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillRect(x + 4, y + 4, 3, 3);
+        ctx.fillRect(x + 12, y + 14, 2, 2);
+      } else if (t === 'B' || t === 'b') {
+        // 书架
+        ctx.fillStyle = '#2d1f14';
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = '#7a3e21';
+        ctx.fillRect(x + 4, y + 6, TILE - 8, 4);
+        ctx.fillStyle = '#3a5f78';
+        ctx.fillRect(x + 6, y + 14, TILE - 12, 4);
+        ctx.fillStyle = '#8f6832';
+        ctx.fillRect(x + 4, y + 22, TILE - 8, 4);
+      } else if (t === 'T') {
+        // 木桌
+        ctx.fillStyle = '#543b27';
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+      } else if (t === 'C') {
+        // 椅子
+        ctx.fillStyle = '#6e4f35';
+        ctx.fillRect(x + 6, y + 6, TILE - 12, TILE - 12);
+      } else if (t === 'F') {
+        // 壁炉火光
+        ctx.fillStyle = '#1e140d';
+        ctx.fillRect(x, y, TILE, TILE);
+        const flicker = Math.sin(Date.now() * 0.008 + c) * 3;
+        ctx.fillStyle = '#cf4f19';
+        ctx.beginPath();
+        ctx.arc(x + 16, y + 16, 10 + flicker, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f7b03b';
+        ctx.beginPath();
+        ctx.arc(x + 16, y + 16, 5 + flicker * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // 绘制沙发与依偎的两人
+  drawCoupledLovers(9.5 * TILE, 5.2 * TILE);
+
+  // 绘制窗外飘进来的光线遮罩
+  const grad = ctx.createRadialGradient(10 * TILE, 10 * TILE, 20, 10 * TILE, 10 * TILE, 240);
+  grad.addColorStop(0, 'rgba(235, 120, 40, 0.25)');
+  grad.addColorStop(0.5, 'rgba(180, 80, 20, 0.1)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  // 绘制玩家小猫
+  drawCat(player.x, player.y, player.dir, player.step);
+
+  // 绘制窗户位置的微弱飞雪
+  ctx.fillStyle = 'rgba(230, 240, 255, 0.75)';
+  for (const s of snow) {
+    if (s.y < 4 * TILE || s.x < 3 * TILE || s.x > 17 * TILE) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// 绘制依偎在大衣下的赫尔曼与阿尔瓦
+function drawCoupledLovers(x, y) {
+  // 破旧红丝绒长沙发
+  ctx.fillStyle = '#63251e';
+  ctx.fillRect(x - 28, y - 6, 56, 32);
+  ctx.fillStyle = '#451611';
+  ctx.fillRect(x - 30, y + 4, 60, 10);
+
+  // 两人身上覆盖的宽大墨绿色毛呢大衣
+  ctx.fillStyle = '#1c3624';
+  ctx.beginPath();
+  ctx.roundRect(x - 22, y - 2, 44, 28, 8);
+  ctx.fill();
+
+  // 赫尔曼（左：深棕色短发，高大）
+  ctx.fillStyle = '#422814';
+  ctx.beginPath();
+  ctx.arc(x - 9, y - 10, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 阿尔瓦（右：清瘦，灰白长发披在左侧，头微微靠向赫尔曼）
+  ctx.fillStyle = '#c7c2b7';
+  ctx.beginPath();
+  ctx.arc(x + 7, y - 8, 7.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 阿尔瓦垂落在耳畔的低马尾
+  ctx.strokeStyle = '#c7c2b7';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x + 12, y - 6);
+  ctx.quadraticCurveTo(x + 16, y + 4, x + 13, y + 12);
+  ctx.stroke();
+
+  // 阿尔瓦右眼的细金链单边眼镜微光
+  ctx.fillStyle = '#fadb6a';
+  ctx.fillRect(x + 9, y - 9, 2, 2);
+
+  // 赫尔曼搂着阿尔瓦肩头的大衣袖口
+  ctx.fillStyle = '#162b1d';
+  ctx.fillRect(x - 14, y + 2, 28, 7);
+}
+
+// 绘制白色小猫
+function drawCat(x, y, dir, step) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const bob = Math.sin(step) * 2;
+
+  // 猫尾巴
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-4, 3 + bob);
+  ctx.quadraticCurveTo(-10, -2 + bob * 1.5, -6, -9 + bob * 2);
+  ctx.stroke();
+
+  // 猫身躯
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(0, 2 + bob, 7, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 猫头
+  ctx.beginPath();
+  ctx.arc(0, -5 + bob, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 猫耳朵
+  ctx.fillStyle = '#fce4ec';
+  ctx.beginPath();
+  ctx.moveTo(-5, -9 + bob); ctx.lineTo(-2, -14 + bob); ctx.lineTo(0, -9 + bob); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, -9 + bob); ctx.lineTo(3, -14 + bob); ctx.lineTo(5, -9 + bob); ctx.fill();
+
+  // 猫眼睛
+  ctx.fillStyle = '#3a8ee6';
+  if (dir === 'left') {
+    ctx.fillRect(-4, -6 + bob, 2, 2);
+  } else if (dir === 'right') {
+    ctx.fillRect(2, -6 + bob, 2, 2);
+  } else if (dir === 'up') {
+    // 背影
+  } else {
+    ctx.fillRect(-3, -6 + bob, 2, 2);
+    ctx.fillRect(1, -6 + bob, 2, 2);
+  }
+
+  ctx.restore();
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

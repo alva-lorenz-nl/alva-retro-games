@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>莱顿漫步 · 运河与大白猫的办公室</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background-color: #1e1e24;
+      color: #eaeaea;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    #game-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      max-width: 100vw;
+      max-height: 100vh;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #355c3c;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
+    }
+    /* UI Overlay */
+    .hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(25, 25, 30, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      color: #f0f0f0;
+      border: 1px solid rgba(255,255,255,0.15);
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .hud span {
+      color: #9cdcfe;
+      font-weight: bold;
+    }
+
+    /* Dialog Box */
+    #dialog-box {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 86%;
+      max-width: 680px;
+      background: rgba(28, 30, 38, 0.92);
+      border: 2px solid #c9a96e;
+      border-radius: 12px;
+      padding: 18px 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      display: none;
+      animation: popIn 0.25s ease-out;
+    }
+    @keyframes popIn {
+      from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+      to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+    #dialog-speaker {
+      font-size: 15px;
+      font-weight: bold;
+      color: #e5c07b;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #dialog-speaker::before {
+      content: "🐾";
+      font-size: 14px;
+    }
+    #dialog-text {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #f3f3f3;
+      margin-bottom: 12px;
+    }
+    .dialog-hint {
+      font-size: 11px;
+      color: #888;
+      text-align: right;
+    }
+
+    /* Interact Prompt */
+    #prompt {
+      position: absolute;
+      left: 50%;
+      bottom: 100px;
+      transform: translateX(-50%);
+      background: #c9a96e;
+      color: #1a1a1a;
+      font-weight: bold;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      display: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      cursor: pointer;
+    }
+
+    /* Virtual Joystick for Mobile */
+    #joystick-zone {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 110px;
+      height: 110px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+      display: none;
+      touch-action: none;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #joystick-stick {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      top: 33px;
+      left: 33px;
+      background: rgba(255,255,255,0.35);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div class="hud">
+    🇳🇱 <span>莱顿大学 · 电气与自动化系</span> | 运河林荫道
+  </div>
+
+  <div id="prompt">靠近按 [E] 或点击互动</div>
+
+  <div id="dialog-box">
+    <div id="dialog-speaker">阿尔瓦大白猫</div>
+    <div id="dialog-text">……</div>
+    <div class="dialog-hint">按 [Space] 或点击关闭</div>
+  </div>
+
+  <div id="joystick-zone">
+    <div id="joystick-stick"></div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const promptEl = document.getElementById("prompt");
+  const dialogBox = document.getElementById("dialog-box");
+  const dialogSpeaker = document.getElementById("dialog-speaker");
+  const dialogText = document.getElementById("dialog-text");
+
+  // Game world setup
+  const TILE_SIZE = 32;
+  const MAP_W = 25;
+  const MAP_H = 19;
+
+  // Player (Little White Cat)
+  const player = {
+    x: 180,
+    y: 350,
+    size: 20,
+    speed: 3.2,
+    vx: 0,
+    vy: 0,
+    direction: 'right',
+    animFrame: 0,
+    animTimer: 0
+  };
+
+  // NPC (Alva Lorenz - Long-haired Big White Cat)
+  const momCat = {
+    x: 640,
+    y: 200,
+    size: 34,
+    dialogIndex: 0,
+    dialogs: [
+      "“乖小猫，顺着运河一路哒哒哒跑过来了？快跳到桌上来，办公椅给垫了最软的垫子。”",
+      "（修长的大白毛爪子轻轻揉了揉你的耳尖，把温热的牛奶小碟推到你爪边）“慢点喝，今天在学校累不累？”",
+      "（蓬松的长尾巴圈在你身侧，单边金丝眼镜后的浅蓝眼眸满是笑意）“既然来了，就在妈妈怀里踏踏实实踩个奶，睡一觉吧。”"
+    ]
+  };
+
+  // Landmarks & Buildings
+  // Leiden Red-brick Faculty Building at (500, 80) to (760, 360)
+  const officeRoom = { x: 520, y: 100, w: 240, h: 220 };
+
+  // Keys tracking
+  const keys = {};
+  window.addEventListener("keydown", (e) => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === "e" || e.key === "E") {
+      interact();
+    }
+    if (e.key === " " || e.key === "Escape") {
+      closeDialog();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    keys[e.key.toLowerCase()] = false;
+  });
+
+  promptEl.addEventListener("click", interact);
+  dialogBox.addEventListener("click", closeDialog);
+
+  function interact() {
+    const dist = Math.hypot(player.x - momCat.x, player.y - momCat.y);
+    if (dist < 65) {
+      dialogBox.style.display = "block";
+      dialogSpeaker.textContent = "阿尔瓦教授（长毛大白猫）";
+      dialogText.textContent = momCat.dialogs[momCat.dialogIndex % momCat.dialogs.length];
+      momCat.dialogIndex++;
+    }
+  }
+
+  function closeDialog() {
+    dialogBox.style.display = "none";
+  }
+
+  // Touch joystick for mobile
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    const joyZone = document.getElementById("joystick-zone");
+    const joyStick = document.getElementById("joystick-stick");
+    joyZone.style.display = "block";
+
+    let joyTouchId = null;
+    let joyCenter = { x: 0, y: 0 };
+
+    joyZone.addEventListener("touchstart", (e) => {
+      const touch = e.changedTouches[0];
+      joyTouchId = touch.identifier;
+      const rect = joyZone.getBoundingClientRect();
+      joyCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      handleJoy(touch);
+    });
+
+    joyZone.addEventListener("touchmove", (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === joyTouchId) {
+          handleJoy(e.changedTouches[i]);
+          break;
+        }
+      }
+    });
+
+    const resetJoy = () => {
+      joyTouchId = null;
+      joyStick.style.transform = `translate(0px, 0px)`;
+      player.vx = 0;
+      player.vy = 0;
+    };
+    joyZone.addEventListener("touchend", resetJoy);
+    joyZone.addEventListener("touchcancel", resetJoy);
+
+    function handleJoy(t) {
+      const dx = t.clientX - joyCenter.x;
+      const dy = t.clientY - joyCenter.y;
+      const dist = Math.hypot(dx, dy);
+      const maxR = 36;
+      const angle = Math.atan2(dy, dx);
+      const clampedDist = Math.min(dist, maxR);
+      const sx = Math.cos(angle) * clampedDist;
+      const sy = Math.sin(angle) * clampedDist;
+      joyStick.style.transform = `translate(${sx}px, ${sy}px)`;
+
+      const intensity = clampedDist / maxR;
+      player.vx = Math.cos(angle) * player.speed * intensity;
+      player.vy = Math.sin(angle) * player.speed * intensity;
+    }
+  }
+
+  function update() {
+    // Keyboard movement
+    let kx = 0;
+    let ky = 0;
+    if (keys['w'] || keys['arrowup']) ky -= 1;
+    if (keys['s'] || keys['arrowdown']) ky += 1;
+    if (keys['a'] || keys['arrowleft']) kx -= 1;
+    if (keys['d'] || keys['arrowright']) kx += 1;
+
+    if (kx !== 0 || ky !== 0) {
+      const len = Math.hypot(kx, ky);
+      player.vx = (kx / len) * player.speed;
+      player.vy = (ky / len) * player.speed;
+    } else if (!('ontouchstart' in window)) {
+      player.vx = 0;
+      player.vy = 0;
+    }
+
+    if (player.vx > 0.1) player.direction = 'right';
+    if (player.vx < -0.1) player.direction = 'left';
+
+    // 碰撞检测与阻挡计算
+    // 1. 运河范围 Y: 440 ~ 540，除了石桥 X: 170 ~ 260 允许通行，其余均不可踏入河中
+    // 2. 办公室外墙 officeRoom { x: 520, y: 100, w: 240, h: 220 }，门位于西侧 (x=520, y=230~280)
+    // 3. 办公室桌子 (officeRoom.x + 80, officeRoom.y + 70, 110, 60)
+    function canMoveTo(nx, ny) {
+      // 边界限制
+      if (nx < 20 || nx > 780 || ny < 20 || ny > 580) return false;
+
+      // 运河水面碰撞（只有走在石桥上才能过河）
+      if (ny >= 440 && ny <= 540) {
+        if (nx < 175 || nx > 255) return false;
+      }
+
+      // 办公室外墙检测（内室可走，但不能穿墙，只能从门进去）
+      const rx = officeRoom.x;
+      const ry = officeRoom.y;
+      const rw = officeRoom.w;
+      const rh = officeRoom.h;
+      const doorTop = ry + 130;
+      const doorBottom = ry + 180;
+
+      // 墙体厚度约 10px
+      // 北墙
+      if (nx >= rx && nx <= rx + rw && ny >= ry - 6 && ny <= ry + 10) return false;
+      // 南墙
+      if (nx >= rx && nx <= rx + rw && ny >= ry + rh - 10 && ny <= ry + rh + 6) return false;
+      // 东墙
+      if (nx >= rx + rw - 10 && nx <= rx + rw + 6 && ny >= ry && ny <= ry + rh) return false;
+      // 西墙（留出门口）
+      if (nx >= rx - 8 && nx <= rx + 10) {
+        if (ny < doorTop || ny > doorBottom) return false;
+      }
+
+      // 办公室大书桌碰撞
+      const deskX = rx + 80;
+      const deskY = ry + 70;
+      const deskW = 110;
+      const deskH = 60;
+      if (nx >= deskX - 12 && nx <= deskX + deskW + 12 && ny >= deskY - 10 && ny <= deskY + deskH + 10) {
+        return false;
+      }
+
+      return true;
+    }
+
+    // 分轴移动与平滑滑步
+    const targetX = player.x + player.vx;
+    const targetY = player.y + player.vy;
+    if (canMoveTo(targetX, player.y)) {
+      player.x = targetX;
+    }
+    if (canMoveTo(player.x, targetY)) {
+      player.y = targetY;
+    }
+
+    // Animation ticker
+    if (Math.hypot(player.vx, player.vy) > 0.2) {
+      player.animTimer++;
+      if (player.animTimer > 8) {
+        player.animFrame = (player.animFrame + 1) % 4;
+        player.animTimer = 0;
+      }
+    } else {
+      player.animFrame = 0;
+    }
+
+    // Interaction range check
+    const dist = Math.hypot(player.x - momCat.x, player.y - momCat.y);
+    if (dist < 65 && dialogBox.style.display !== "block") {
+      promptEl.style.display = "block";
+    } else {
+      promptEl.style.display = "none";
+    }
+  }
+
+  // Rendering
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Grass Ground
+    ctx.fillStyle = "#3b6b3e";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Leiden Canal (运河从左穿过)
+    ctx.fillStyle = "#2c5282";
+    ctx.fillRect(0, 440, canvas.width, 100);
+    // Canal ripples
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      let rx = (Date.now() / 25 + i * 140) % (canvas.width + 60) - 30;
+      let ry = 460 + (i % 3) * 26;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + 28, ry);
+      ctx.stroke();
+    }
+
+    // Canal Stone Bridge (拱石桥连接两岸)
+    ctx.fillStyle = "#7c8591";
+    ctx.fillRect(170, 420, 90, 140);
+    ctx.fillStyle = "#9ba3af";
+    ctx.fillRect(175, 420, 80, 140);
+    // Bridge railings
+    ctx.fillStyle = "#4a5568";
+    ctx.fillRect(170, 420, 5, 140);
+    ctx.fillRect(255, 420, 5, 140);
+
+    // 3. Cobblestone Pathways (红砖鹅卵石小道)
+    ctx.fillStyle = "#ab8360";
+    // Path from bridge to office
+    ctx.fillRect(190, 260, 50, 170);
+    ctx.fillRect(220, 260, 320, 45);
+
+    // 4. Red-brick Faculty Building (电气工程系与办公室)
+    ctx.fillStyle = "#8a3c2c";
+    ctx.fillRect(officeRoom.x, officeRoom.y, officeRoom.w, officeRoom.h);
+    // Roof eaves
+    ctx.fillStyle = "#5c2419";
+    ctx.fillRect(officeRoom.x - 8, officeRoom.y - 12, officeRoom.w + 16, 16);
+
+    // Interior floor
+    ctx.fillStyle = "#d1a374";
+    ctx.fillRect(officeRoom.x + 10, officeRoom.y + 10, officeRoom.w - 20, officeRoom.h - 20);
+
+    // Doorway
+    ctx.fillStyle = "#5c2419";
+    ctx.fillRect(officeRoom.x - 2, officeRoom.y + 130, 14, 50);
+
+    // Big Wooden Desk in the office
+    ctx.fillStyle = "#63391b";
+    ctx.fillRect(officeRoom.x + 80, officeRoom.y + 70, 110, 60);
+    // Warm milk saucer on desk
+    ctx.fillStyle = "#fefefe";
+    ctx.beginPath();
+    ctx.arc(officeRoom.x + 100, officeRoom.y + 90, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff8db";
+    ctx.beginPath();
+    ctx.arc(officeRoom.x + 100, officeRoom.y + 90, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trees & Benches in Leiden
+    drawTree(80, 150);
+    drawTree(120, 280);
+    drawTree(400, 180);
+    drawTree(340, 380);
+
+    // 5. Draw NPC: Alva Lorenz (Long-haired Big White Cat)
+    drawMomCat(momCat.x, momCat.y);
+
+    // 6. Draw Player: Little White Cat
+    drawPlayerCat(player.x, player.y, player.direction, player.animFrame);
+
+    requestAnimationFrame(loop);
+  }
+
+  function drawTree(tx, ty) {
+    // Trunk
+    ctx.fillStyle = "#543d2b";
+    ctx.fillRect(tx - 6, ty, 12, 28);
+    // Foliage
+    ctx.fillStyle = "#27502c";
+    ctx.beginPath();
+    ctx.arc(tx, ty - 8, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#336639";
+    ctx.beginPath();
+    ctx.arc(tx - 6, ty - 14, 20, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawMomCat(cx, cy) {
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Soft shadow
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.beginPath();
+    ctx.ellipse(0, 16, 26, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Long fluffy white-grey coat
+    ctx.fillStyle = "#ececee";
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 22, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fluffy tail curling gracefully
+    const tailWiggle = Math.sin(Date.now() / 400) * 0.15;
+    ctx.strokeStyle = "#e2e2e6";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(14, 8);
+    ctx.quadraticCurveTo(34 + tailWiggle * 10, -6, 28, -22);
+    ctx.stroke();
+
+    // Head
+    ctx.fillStyle = "#f5f5f7";
+    ctx.beginPath();
+    ctx.arc(-4, -10, 14, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Long elegant ears
+    ctx.fillStyle = "#ececec";
+    ctx.beginPath();
+    ctx.moveTo(-14, -18);
+    ctx.lineTo(-10, -28);
+    ctx.lineTo(-4, -20);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.lineTo(6, -28);
+    ctx.lineTo(10, -18);
+    ctx.fill();
+
+    // Monocle on right eye (gold rim & chain)
+    ctx.strokeStyle = "#d4af37";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.arc(1, -11, 4.5, 0, Math.PI * 2);
+    ctx.stroke();
+    // Blue eyes
+    ctx.fillStyle = "#63b3ed";
+    ctx.beginPath();
+    ctx.arc(1, -11, 2, 0, Math.PI * 2);
+    ctx.arc(-8, -11, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Blue ribbon collar
+    ctx.fillStyle = "#3182ce";
+    ctx.fillRect(-10, 0, 14, 4);
+
+    // Name tag
+    ctx.fillStyle = "#f6e05e";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("阿尔瓦大白猫", 0, -32);
+
+    ctx.restore();
+  }
+
+  function drawPlayerCat(px, py, dir, frame) {
+    ctx.save();
+    ctx.translate(px, py);
+
+    // 绘制猫身（根据朝向水平翻转，但不翻转文字）
+    ctx.save();
+    if (dir === 'left') ctx.scale(-1, 1);
+
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 14, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cat Body (pure white)
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 12, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(8, -6, 9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ears (with pink inner)
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.moveTo(4, -12); ctx.lineTo(7, -19); ctx.lineTo(10, -13); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(9, -12); ctx.lineTo(13, -18); ctx.lineTo(15, -11); ctx.fill();
+    ctx.fillStyle = "#ffccd5";
+    ctx.beginPath();
+    ctx.moveTo(6, -13); ctx.lineTo(7, -17); ctx.lineTo(9, -13); ctx.fill();
+
+    // Blue Eye
+    ctx.fillStyle = "#4299e1";
+    ctx.beginPath();
+    ctx.arc(11, -7, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cute High-held Tail (尾巴翘高高！)
+    const walkBounce = (frame % 2 === 0 ? 0 : 2);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-9, 0);
+    ctx.quadraticCurveTo(-14, -16 + walkBounce, -10, -22);
+    ctx.stroke();
+
+    // Tiny pink nose
+    ctx.fillStyle = "#ffb3ba";
+    ctx.fillRect(14, -6, 2, 2);
+
+    ctx.restore(); // 恢复翻转状态
+
+    // 名字标签保持正向，绝不变成“猫白小”
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("小白猫", 0, -25);
+
+    ctx.restore();
+  }
+
+  function loop() {
+    update();
+    render();
+  }
+
+  // Start game
+  loop();
+</script>
+
+</body>
+</html>
