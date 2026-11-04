@@ -630,7 +630,7 @@
     .stats-share-btn {
       display: block;
       width: 100%;
-      margin: 14px 0 4px;
+      margin: 0 0 14px;
       padding: 10px 14px;
       border-radius: 8px;
       background: linear-gradient(135deg, #4a3625, #63482f);
@@ -755,6 +755,9 @@
         <button class="stats-modal-close" id="btnCloseStats" title="关闭">&times;</button>
       </div>
       <div class="stats-modal-body">
+        <!-- 📤 分享手帐：生成一张可以保存的长图（置于手帐最顶端） -->
+        <button class="stats-share-btn" id="btnShareCard">📤 生成分享手帐图</button>
+
         <div class="stats-grid">
           <div class="stats-box">
             <div class="stats-box-icon">💬</div>
@@ -814,9 +817,6 @@
             <!-- 动态生成成就卡片 -->
           </div>
         </div>
-
-        <!-- 📤 分享手帐：生成一张可以保存的长图 -->
-        <button class="stats-share-btn" id="btnShareCard">📤 生成分享手帐图</button>
 
         <div class="stats-flavor" id="statsFlavor">
           “长椅上的赫尔曼今天也在叹气呢……不过别担心，小鱼干和华夫饼我都给你备好了。”
@@ -948,6 +948,13 @@
     const CD = window.CatWalkDialogues || {};
     const hermanDialogues = CD.hermanDialogues || [];
     let hermanDialogIndex = 0;
+
+    // 赫尔曼被打怕之后的探头台词，以及被挠时的固定台词
+    const hermanFearDialogues = CD.hermanFearDialogues || [];
+    let hermanFearIndex = 0;
+    const hermanScratchFixed = CD.hermanScratchFixed || [];
+    let hermanFixedIndex = 0;
+    let scratchHitCount = 0;
 
     const alvaDialogues = CD.alvaDialogues || [];
     let alvaDialogIndex = 0;
@@ -1662,13 +1669,13 @@ let catAction = 'idle';
           // 8帧走动时头部微幅起伏动态校准
           const walkOffsets = [
             [0, 0],   // 0
-            [-1, 0],  // 1
-            [0, 0],   // 2
-            [-1, 0],  // 3
+            [0, -1],  // 1
+            [0, -2],  // 2
+            [-2, -1], // 3 单帧微调：领结前移贴近下颌
             [0, 0],   // 4
-            [-1, 0],  // 5
-            [0, 0],   // 6
-            [-1, 0]   // 7
+            [0, -1],  // 5
+            [0, -2],  // 6
+            [0, -1]   // 7
           ];
           const off = walkOffsets[frame % 8] || [0, 0];
           bowOffsetX = off[0];
@@ -1677,18 +1684,18 @@ let catAction = 'idle';
           // 挠人前倾动作动态校准
           const scratchOffsets = [
             [0, 0],
-            [2, 0],
-            [3, 0],
-            [3, 0],
-            [3, 0],
-            [3, 0],
-            [2, 0]
+            [-1, 0],
+            [0, 1],
+            [0, 1],
+            [0, 1],
+            [0, 1],
+            [-1, 0]
           ];
           const off = scratchOffsets[frame % 7] || [0, 0];
           bowOffsetX = off[0];
           bowOffsetY = off[1];
         }
-        const bowX = sidePose ? (5 + bowOffsetX) : -1;
+        const bowX = sidePose ? (7 + bowOffsetX) : -1;
         const bowY = sidePose ? (-10 + bowOffsetY) : -11;
 
         // 1. 领结与项圈渲染：环绕脖颈一圈，前挂精巧领结
@@ -1696,23 +1703,26 @@ let catAction = 'idle';
           if (sidePose) {
             // 侧身状态：项圈从颈后斜向环绕至喉前，前端系挂透视领结
             // 环颈项圈带（从后颈背沿斜下方环绕至喉咙前）
+            px(bowX - 5, bowY - 3, 1, 1, bandDark);   // 后颈处
+            px(bowX - 4, bowY - 3, 1, 1, bandLight);
+            px(bowX - 5, bowY - 2, 1, 1, bandLight);
             px(bowX - 4, bowY - 2, 1, 1, bandDark);
             px(bowX - 3, bowY - 2, 1, 1, bandLight);
-            px(bowX - 2, bowY - 1, 1, 1, bandDark);
-            px(bowX - 1, bowY - 1, 1, 1, bandLight);
-            px(bowX, bowY, 1, 1, bandDark);
+            px(bowX - 3, bowY - 1, 1, 1, bandDark);   // 沿颈侧下行
+            px(bowX - 2, bowY - 1, 1, 1, bandLight);
+            px(bowX - 2, bowY, 1, 1, bandDark);
+            px(bowX - 1, bowY, 1, 1, bandLight);      // 喉前收口
 
-            // 前方领结本体（结心扣眼 + 侧向立体蝴蝶结双翼）
-            px(bowX + 1, bowY, 1, 1, '#ffffff'); // 结心高光
-            px(bowX + 1, bowY + 1, 1, 1, light);
-            px(bowX + 2, bowY - 1, 1, 1, light); // 上翼
-            px(bowX + 2, bowY, 1, 1, mid);
-            px(bowX + 2, bowY + 1, 1, 1, deep);  // 下翼
-            px(bowX + 3, bowY, 1, 1, deep);      // 翼尖
+            // 喉前侧向透视的小领结（结心 + 前翼）
+            px(bowX, bowY, 1, 1, '#ffffff');     // 结心
+            px(bowX + 1, bowY - 1, 1, 1, light); // 上翼
+            px(bowX + 1, bowY, 1, 1, light);
+            px(bowX + 1, bowY + 1, 1, 1, mid);   // 下翼
+            px(bowX, bowY + 1, 1, 1, deep);      // 结底阴影
 
             // 细微反光
             if (Math.random() < 0.25) {
-              px(bowX + 2, bowY - 1, 1, 1, '#ffffff');
+              px(bowX + 1, bowY - 1, 1, 1, '#ffffff');
             }
           } else {
             // 正面状态：项圈左右环绕颈部，正中端正佩戴蝴蝶结
@@ -2620,8 +2630,14 @@ dialog.addEventListener('click', () => {
         showDialog(alvaDialogues[alvaDialogIndex % alvaDialogues.length]);
         alvaDialogIndex++;
       } else if (distHerman < 45) {
-        showDialog(hermanDialogues[hermanDialogIndex % hermanDialogues.length]);
-        hermanDialogIndex++;
+        // 被打败过几次以后，赫尔曼一看见小猫探头就发怵
+        if (totalKoCount >= 3 && hermanFearDialogues.length && Math.random() < 0.5) {
+          showDialog(hermanFearDialogues[hermanFearIndex % hermanFearDialogues.length]);
+          hermanFearIndex++;
+        } else {
+          showDialog(hermanDialogues[hermanDialogIndex % hermanDialogues.length]);
+          hermanDialogIndex++;
+        }
       } else {
         catMeow();
       }
@@ -2725,9 +2741,16 @@ dialog.addEventListener('click', () => {
             showDialog(`【暴击！-${damage} HP】` + bossText);
             bossScratchIndex++;
           } else {
-            const baseText = scratchDialogues[scratchIndex % scratchDialogues.length];
-            showDialog(`【暴击！-${damage} HP】` + baseText);
-            scratchIndex++;
+            scratchHitCount++;
+            if (hermanScratchFixed.length && scratchHitCount % 3 === 0) {
+              const fixedText = hermanScratchFixed[hermanFixedIndex % hermanScratchFixed.length];
+              hermanFixedIndex++;
+              showDialog(`【暴击！-${damage} HP】` + fixedText);
+            } else {
+              const baseText = scratchDialogues[scratchIndex % scratchDialogues.length];
+              showDialog(`【暴击！-${damage} HP】` + baseText);
+              scratchIndex++;
+            }
           }
         }
       } else {
