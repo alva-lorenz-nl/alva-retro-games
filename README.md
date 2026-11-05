@@ -1,6 +1,6 @@
 # 🍂 运河漫步 · 小猫与阿尔瓦的秋日散步 (Leiden Canal Cat Walk)
 
-> **版本**：v2.1.0 (模块化解耦与衣橱系统重构版)  
+> **版本**：v2.2.0 (台词档位系统与探头分档版)  
 > **运行方式**：直接在现代浏览器中双击打开 `cat_walk_index.html` 即可运行。
 
 ---
@@ -21,6 +21,9 @@
 - `window.CatWalkDialogues.hermanDialogues`: 长椅上赫尔曼的常态碎碎念台词。
 - `window.CatWalkDialogues.alvaDialogues`: 阿尔瓦递拿铁、揉耳尖的温柔互动台词。
 - `window.CatWalkDialogues.scratchDialogues`: 普通形态抓挠赫尔曼的趣味反应。
+- `window.CatWalkDialogues.scratchTiers`: 抓挠档位台词（按累计挠击次数分 0 / 10 / 25 / 40 / 50 五档）。
+- `window.CatWalkDialogues.hermanPeekTiers`: 探头看看·赫尔曼档位台词（按累计击倒次数分 5 / 20 / 50 三档，0~4 用 `hermanDialogues`）。
+- `window.CatWalkDialogues.alvaPeekTiers`: 探头看看·阿尔瓦档位台词（同样 5 / 20 / 50 三档，越来越纵容）。
 - `window.CatWalkDialogues.bossScratchDialogues`: 击打 500HP 黄金赫尔曼时的金属火花对话。
 - `window.CatWalkDialogues.diamondScratchDialogues`: 击打 1000HP 钻石赫尔曼时的七彩折射对话。
 - `window.CatWalkDialogues.catMeows`: 小猫按空格或主动喵喵叫的台词。
@@ -39,6 +42,25 @@
   - 支持快捷键 `T` 或 `I`、或点击右下角浮动按钮随时呼出。
   - **自由穿戴/卸下**：在衣橱中点击已解锁的领结或小王冠，即可随时换装！
   - **点击道具**：白手帕可擦拭肉垫，焦糖华夫饼点击可香甜食用并冒出对话框。
+
+---
+
+## 🎚️ 台词档位系统（按累计次数自动切换）
+
+台词不再是一套说到底，而是随「击倒赫尔曼的次数」「挠他的次数」逐档变脸，进度存在本地（`localStorage`），刷新不清零。
+
+**探头看看（按累计击倒次数 `cat_ko_count`）**
+
+| 档位 | 赫尔曼 | 阿尔瓦 |
+| :--- | :--- | :--- |
+| 0~4 | `hermanDialogues`：嘴硬塞华夫饼 | `alvaDialogues`：揉耳尖、递拿铁 |
+| 5~19 | 拿手稿当盾牌，往长椅另一头挪 | 无奈的和事佬，「你是不是该收敛一点」 |
+| 20~49 | 认命，「要挠就快些，我还有个会」 | 偷偷递小鱼干，替你拈掉爪上的线头 |
+| 50+ | 拍拍长椅请你坐，「先吃后挠」 | 共犯，「这出戏我看了一个月，还没看腻」 |
+
+**抓挠赫尔曼（按累计挠击次数）**：0~9 轻视 → 10~24 收回「小畜生」 → 25~39 发怵 → 40~49 麻木数着下数 → 50+ 乐在其中主动递袖子。
+
+> 想改档位分界，只改各档的 `min` 数字即可；数组会按 `min` 自动排序，不必手写顺序。某档没填台词就自动回落到基础台词轮播。
 
 ---
 
@@ -70,3 +92,18 @@
 打开 `cat_walk_dialogues.js`：
 - 在对应的数组末尾加上一行 `"你的新台词内容",`
 - 保存后刷新网页，立即生效！
+
+---
+
+## 📁 目录约定（产物请各归各位）
+
+| 目录 | 放什么 |
+| --- | --- |
+| 根目录 | 只放游戏本体：`cat_walk_index.html`、`cat_walk_dialogues.js`、四张猫咪毛色图、本 README |
+| `scripts/` | 一次性的检查、切片、注入、截图脚本（`*.py`） |
+| `previews/` | 调试截图、预览图、对比图（`*.png` / `*.gif`），不是运行时资源 |
+| `backup/` | 改动前的 `.bak` 备份 |
+| `pages/` | 早期单独的页面（`leiden_*.html`、`library_date.html` 等） |
+| `docs/` | 设计稿、提示词、文案草稿（`*.md`） |
+
+> 新建脚本请直接存进 `scripts/`，截图一律输出到 `previews/`，别再堆在根目录。

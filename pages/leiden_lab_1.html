@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>莱顿实验室 · 一只白猫的午后</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #14100c;
+    font-family: "PingFang SC", "Microsoft YaHei", "WenQuanYi Zen Hei", sans-serif;
+    overflow: hidden;
+  }
+  #wrap {
+    position: relative; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    box-shadow: 0 0 60px rgba(0,0,0,.8), 0 0 0 1px #3a2f22;
+    max-width: 100%; max-height: 100%;
+  }
+  #hint {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    color: #c9b48a; font-size: 13px; letter-spacing: .08em;
+    background: rgba(20,16,12,.72); padding: 7px 16px; border-radius: 20px;
+    border: 1px solid #4a3c28; white-space: nowrap; pointer-events: none;
+    transition: opacity .6s;
+  }
+  #dialog {
+    position: absolute; left: 50%; bottom: 6%;
+    transform: translateX(-50%) translateY(14px);
+    width: min(680px, 88vw);
+    background: linear-gradient(180deg, #f6efdd, #e8dcc2);
+    border: 3px solid #6b5535; border-radius: 10px;
+    padding: 18px 22px 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6);
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s, transform .22s;
+  }
+  #dialog.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+  #speaker {
+    font-size: 15px; font-weight: 700; color: #6b4a1e;
+    letter-spacing: .1em; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #speaker::before {
+    content: ""; width: 10px; height: 10px; background: #8a6a2e;
+    transform: rotate(45deg); display: inline-block;
+  }
+  #text {
+    font-size: 16px; line-height: 1.85; color: #2e2418;
+    min-height: 62px; white-space: pre-wrap;
+  }
+  #next {
+    text-align: right; font-size: 12px; color: #8a7550;
+    margin-top: 6px; letter-spacing: .1em;
+  }
+  #next.blink { animation: bl 1.1s infinite; }
+  @keyframes bl { 0%,100%{opacity:.35} 50%{opacity:1} }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="640" height="416"></canvas>
+  <div id="hint">WASD / 方向键 移动 · 靠近他们按 E 说话</div>
+  <div id="dialog">
+    <div id="speaker"></div>
+    <div id="text"></div>
+    <div id="next">E / 空格 继续</div>
+  </div>
+</div>
+<script>
+"use strict";
+
+/* ============ 基础 ============ */
+const TILE = 32;
+const COLS = 20, ROWS = 13;
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// 自适应缩放
+function fit() {
+  const s = Math.min(window.innerWidth / cv.width, window.innerHeight / cv.height);
+  const k = Math.max(1, Math.floor(s));
+  cv.style.width = (cv.width * k) + 'px';
+  cv.style.height = (cv.height * k) + 'px';
+}
+window.addEventListener('resize', fit); fit();
+
+/* ============ 地图 ============ */
+// # 墙  . 地板  D 门  T 实验台  S 书架  W 窗  C 椅  L 灯  P 盆栽
+const MAP = [
+  "####################",
+  "#WW....#....#......S#",
+  "#WW....#....#......S#",
+  "#......#....#.......#",
+  "#..TT..#.TT.#..TT...#",
+  "#..TT..#.TT.#..TT...#",
+  "#......D....D.......#",
+  "#..CC..#.CC.#..CC...#",
+  "#......#....#.......#",
+  "#S.....#....#....P..#",
+  "#S.....D....D.......#",
+  "#......#....#.......#",
+  "####################"
+];
+
+function tileAt(c, r) {
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return '#';
+  return MAP[r][c];
+}
+function solid(c, r) {
+  const t = tileAt(c, r);
+  return t === '#' || t === 'T' || t === 'S' || t === 'P';
+}
+
+/* ============ 角色 ============ */
+const player = {
+  x: 9.5 * TILE, y: 11.2 * TILE,
+  w: 18, h: 14,
+  speed: 118,
+  dir: 'up',
+  step: 0
+};
+
+// 两位年轻的学者
+const npcs = [
+  {
+    id: 'herman',
+    name: '赫尔曼·塞曼',
+    x: 5.0 * TILE, y: 5.6 * TILE,
+    color: '#7a5a30',
+    hair: '#5a3f1e',
+    lines: [
+      "（年轻的他正盯着满墙的公式，头也不回）\n……等一下，这个收敛条件不对。你看，如果把它当成一个循环，它永远停不下来。",
+      "（终于转过身，笑了一下）\n哦，是只白猫。你从哪儿溜进来的？阿尔维说过不许在实验室养动物，不过——他不在。",
+      "我跟你讲，我想造一台永远转下去的机器。不是永动机，是那种……能自己学会怎么转的机器。听起来很傻，对吧？",
+      "（蹲下来，伸手）别怕。你要是愿意，就在这儿待着。我们这儿缺一个不催进度的家伙。"
+    ]
+  },
+  {
+    id: 'alva',
+    name: '阿尔瓦·洛伦兹',
+    x: 14.0 * TILE, y: 5.6 * TILE,
+    color: '#3f4a5a',
+    hair: '#c9c4b8',
+    lines: [
+      "（推了推眼镜，从图纸上抬起头）\n赫尔曼，你又在跟空气讲你的永动机了？",
+      "（注意到你，语气软下来）\n……哪来的猫。白得这么干净，不像野的。",
+      "（伸手把你抱起来，很轻）\n你倒是比他安静。他昨晚在这儿坐到三点，说要找到“完美的算法”。完美，你听听。",
+      "（低声）别告诉他我说了这些。他脸皮薄，但心是好的。"
+    ]
+  }
+];
+
+/* ============ 输入 ============ */
+const keys = {};
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
+  keys[k] = true;
+  if (k === 'e' || k === ' ') {
+    if (dialogOpen) advanceDialog();
+    else tryTalk();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+/* ============ 对话 ============ */
+const dlgEl = document.getElementById('dialog');
+const spkEl = document.getElementById('speaker');
+const txtEl = document.getElementById('text');
+const nxtEl = document.getElementById('next');
+let dialogOpen = false;
+let curLines = null, curIdx = 0, curName = '';
+
+function tryTalk() {
+  let best = null, bd = 1e9;
+  for (const n of npcs) {
+    const d = Math.hypot(n.x - player.x, n.y - player.y);
+    if (d < bd) { bd = d; best = n; }
+  }
+  if (best && bd < 58) {
+    curLines = best.lines; curIdx = 0; curName = best.name;
+    dialogOpen = true;
+    dlgEl.classList.add('show');
+    document.getElementById('hint').style.opacity = '0';
+    renderLine();
+  }
+}
+function renderLine() {
+  spkEl.textContent = curName;
+  txtEl.textContent = curLines[curIdx];
+  nxtEl.classList.toggle('blink', true);
+}
+function advanceDialog() {
+  curIdx++;
+  if (curIdx >= curLines.length) {
+    dialogOpen = false;
+    dlgEl.classList.remove('show');
+    document.getElementById('hint').style.opacity = '1';
+  } else renderLine();
+}
+
+/* ============ 更新 ============ */
+function update(dt) {
+  if (dialogOpen) return;
+  let dx = 0, dy = 0;
+  if (keys['a'] || keys['arrowleft']) dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+  if (keys['w'] || keys['arrowup']) dy -= 1;
+  if (keys['s'] || keys['arrowdown']) dy += 1;
+
+  if (dx || dy) {
+    const len = Math.hypot(dx, dy);
+    dx /= len; dy /= len;
+    if (Math.abs(dx) > Math.abs(dy)) player.dir = dx > 0 ? 'right' : 'left';
+    else player.dir = dy > 0 ? 'down' : 'up';
+
+    const sp = player.speed * dt;
+    moveAxis(dx * sp, 0);
+    moveAxis(0, dy * sp);
+    player.step += dt * 9;
+  } else {
+    player.step = 0;
+  }
+}
+
+function moveAxis(mx, my) {
+  const nx = player.x + mx, ny = player.y + my;
+  const hw = player.w / 2, hh = player.h / 2;
+  const left = nx - hw, right = nx + hw, top = ny - hh, bot = ny + hh;
+  const c1 = Math.floor(left / TILE), c2 = Math.floor((right - 0.01) / TILE);
+  const r1 = Math.floor(top / TILE), r2 = Math.floor((bot - 0.01) / TILE);
+  for (let r = r1; r <= r2; r++)
+    for (let c = c1; c <= c2; c++)
+      if (solid(c, r)) return;
+  player.x = nx; player.y = ny;
+}
+
+/* ============ 绘制 ============ */
+function drawFloor() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const t = MAP[r][c];
+      const x = c * TILE, y = r * TILE;
+      if (t === '#') {
+        ctx.fillStyle = '#2a2118';
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = '#3a2f22';
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        ctx.fillStyle = '#332a1e';
+        ctx.fillRect(x + 2, y + TILE - 6, TILE - 4, 4);
+      } else {
+        // 木地板
+        const alt = (c + r) % 2 === 0;
+        ctx.fillStyle = alt ? '#6b5236' : '#65502f';
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = 'rgba(0,0,0,.08)';
+        ctx.fillRect(x, y + TILE - 2, TILE, 2);
+        ctx.fillRect(x + TILE - 2, y, 2, TILE);
+      }
+    }
+  }
+}
+
+function drawProps() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const t = MAP[r][c];
+      const x = c * TILE, y = r * TILE;
+      if (t === 'W') {
+        // 窗：外面是莱顿的灰蓝天
+        ctx.fillStyle = '#8fa8bd';
+        ctx.fillRect(x + 3, y + 3, TILE - 6, TILE - 6);
+        ctx.fillStyle = '#b9cde0';
+        ctx.fillRect(x + 5, y + 5, TILE - 10, 10);
+        ctx.fillStyle = '#5d6f80';
+        ctx.fillRect(x + TILE / 2 - 1, y + 3, 2, TILE - 6);
+        ctx.fillRect(x + 3, y + TILE / 2 - 1, TILE - 6, 2);
+      } else if (t === 'T') {
+        // 实验台
+        ctx.fillStyle = '#3d2f20';
+        ctx.fillRect(x + 1, y + 6, TILE - 2, TILE - 10);
+        ctx.fillStyle = '#8a6a3e';
+        ctx.fillRect(x + 1, y + 2, TILE - 2, 8);
+        ctx.fillStyle = '#a8824c';
+        ctx.fillRect(x + 1, y + 2, TILE - 2, 3);
+        // 器皿
+        ctx.fillStyle = '#9fd6c8';
+        ctx.fillRect(x + 7, y - 4, 6, 8);
+        ctx.fillStyle = '#c9e8de';
+        ctx.fillRect(x + 8, y - 3, 2, 4);
+        ctx.fillStyle = '#d8b06a';
+        ctx.fillRect(x + 19, y - 3, 5, 7);
+      } else if (t === 'S') {
+        // 书架
+        ctx.fillStyle = '#3a2a18';
+        ctx.fillRect(x + 1, y, TILE - 2, TILE);
+        const cols = ['#8a3a2a','#3a5a7a','#7a6a2a','#4a6a3a','#6a3a6a'];
+        for (let i = 0; i < 5; i++) {
+          ctx.fillStyle = cols[(i + c) % cols.length];
+          ctx.fillRect(x + 4 + i * 5, y + 5, 4, 10);
+          ctx.fillRect(x + 4 + i * 5, y + 19, 4, 9);
+        }
+      } else if (t === 'C') {
+        ctx.fillStyle = '#4a3a24';
+        ctx.fillRect(x + 6, y + 8, TILE - 12, TILE - 12);
+        ctx.fillStyle = '#5d4a2e';
+        ctx.fillRect(x + 6, y + 8, TILE - 12, 5);
+        ctx.fillStyle = '#3a2c1a';
+        ctx.fillRect(x + 7, y + TILE - 6, 3, 5);
+        ctx.fillRect(x + TILE - 10, y + TILE - 6, 3, 5);
+      } else if (t === 'P') {
+        ctx.fillStyle = '#7a4a2a';
+        ctx.fillRect(x + 10, y + 18, 12, 10);
+        ctx.fillStyle = '#3f7a3a';
+        ctx.fillRect(x + 8, y + 8, 16, 12);
+        ctx.fillStyle = '#4f9448';
+        ctx.fillRect(x + 11, y + 5, 10, 8);
+      }
+    }
+  }
+}
+
+function drawCat(x, y, t) {
+  const bob = Math.sin(t * 9) * 1.2;
+  const px = Math.round(x), py = Math.round(y + bob);
+  // 影子
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 8, 11, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 尾巴
+  ctx.strokeStyle = '#f2f0ea';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  const tw = Math.sin(t * 4) * 4;
+  ctx.moveTo(px - 8, py + 2);
+  ctx.quadraticCurveTo(px - 16, py - 4 + tw, px - 12, py - 10 + tw);
+  ctx.stroke();
+  // 身体
+  ctx.fillStyle = '#f7f5ef';
+  ctx.fillRect(px - 8, py - 4, 16, 12);
+  // 头
+  ctx.fillStyle = '#fbfaf5';
+  ctx.fillRect(px - 7, py - 13, 14, 11);
+  // 耳朵
+  ctx.fillStyle = '#fbfaf5';
+  ctx.beginPath();
+  ctx.moveTo(px - 7, py - 13); ctx.lineTo(px - 5, py - 19); ctx.lineTo(px - 1, py - 13);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(px + 7, py - 13); ctx.lineTo(px + 5, py - 19); ctx.lineTo(px + 1, py - 13);
+  ctx.fill();
+  ctx.fillStyle = '#e8b9b0';
+  ctx.fillRect(px - 5, py - 16, 2, 2);
+  ctx.fillRect(px + 3, py - 16, 2, 2);
+  // 眼睛
+  ctx.fillStyle = '#2f6b4f';
+  ctx.fillRect(px - 5, py - 10, 2, 3);
+  ctx.fillRect(px + 3, py - 10, 2, 3);
+  // 鼻子
+  ctx.fillStyle = '#e8a0a0';
+  ctx.fillRect(px - 1, py - 6, 2, 2);
+}
+
+function drawNPC(n, t) {
+  const px = Math.round(n.x), py = Math.round(n.y);
+  const bob = Math.sin(t * 2 + (n.id === 'herman' ? 0 : 1.7)) * 1.0;
+  const y = py + bob;
+  // 影子
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 14, 12, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 腿
+  ctx.fillStyle = '#2c2418';
+  ctx.fillRect(px - 6, y + 4, 5, 10);
+  ctx.fillRect(px + 1, y + 4, 5, 10);
+  // 身体（西装）
+  ctx.fillStyle = n.color;
+  ctx.fillRect(px - 8, y - 10, 16, 16);
+  // 白衬衣
+  ctx.fillStyle = '#e8e2d2';
+  ctx.fillRect(px - 2, y - 10, 4, 12);
+  // 领针
+  ctx.fillStyle = '#4a8a5a';
+  ctx.fillRect(px - 1, y - 7, 2, 2);
+  // 头
+  ctx.fillStyle = '#e8c9a8';
+  ctx.fillRect(px - 6, y - 22, 12, 12);
+  // 头发
+  ctx.fillStyle = n.hair;
+  ctx.fillRect(px - 6, y - 24, 12, 5);
+  ctx.fillRect(px - 7, y - 22, 2, 6);
+  ctx.fillRect(px + 5, y - 22, 2, 6);
+  // 眼睛
+  ctx.fillStyle = '#2a2018';
+  ctx.fillRect(px - 4, y - 17, 2, 2);
+  ctx.fillRect(px + 2, y - 17, 2, 2);
+  // 阿尔维的眼镜
+  if (n.id === 'alva') {
+    ctx.strokeStyle = '#c9c4b8';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px - 5.5, y - 18.5, 4, 4);
+    ctx.strokeRect(px + 1.5, y - 18.5, 4, 4);
+    ctx.beginPath();
+    ctx.moveTo(px - 1.5, y - 16.5); ctx.lineTo(px + 1.5, y - 16.5);
+    ctx.stroke();
+  }
+}
+
+function drawVignette() {
+  const g = ctx.createRadialGradient(cv.width/2, cv.height/2, cv.height*0.3, cv.width/2, cv.height/2, cv.height*0.95);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(10,6,2,.55)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+}
+
+/* ============ 主循环 ============ */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  const t = now / 1000;
+
+  update(dt);
+
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  drawFloor();
+  drawProps();
+
+  // 按 y 排序，实现前后遮挡
+  const ents = [
+    { y: player.y, draw: () => drawCat(player.x, player.y, t) },
+    ...npcs.map(n => ({ y: n.y, draw: () => drawNPC(n, t) }))
+  ].sort((a, b) => a.y - b.y);
+  ents.forEach(e => e.draw());
+
+  drawVignette();
+
+  // 靠近提示
+  if (!dialogOpen) {
+    for (const n of npcs) {
+      if (Math.hypot(n.x - player.x, n.y - player.y) < 58) {
+        ctx.fillStyle = 'rgba(246,239,221,.92)';
+        ctx.fillRect(n.x - 26, n.y - 40, 52, 15);
+        ctx.fillStyle = '#4a3a22';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('E 说话', n.x, n.y - 29);
+        ctx.textAlign = 'left';
+        break;
+      }
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// 点击也能推进对话
+cv.addEventListener('click', () => { if (dialogOpen) advanceDialog(); });
+</script>
+</body>
+</html>

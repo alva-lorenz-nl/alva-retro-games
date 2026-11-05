@@ -425,6 +425,7 @@
       -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 100%);
       mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 100%);
     }
+    .dialog-box:empty { display: none; }
     .dialog-box::-webkit-scrollbar { width: 4px; }
     .dialog-box::-webkit-scrollbar-thumb { background: #6b5c4f; border-radius: 2px; }
     .log-entry {
@@ -729,13 +730,39 @@
       background: #6d4d2f;
       box-shadow: 0 0 12px rgba(212, 136, 6, 0.35);
     }
+
+    /* 四季拨键 */
+    .season-dial {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 25;
+      padding: 4px 9px;
+      font-size: 10px;
+      letter-spacing: 0.4px;
+      line-height: 1.2;
+      color: #ffe6b8;
+      background: rgba(30, 26, 24, 0.72);
+      border: 1px solid rgba(212, 136, 6, 0.45);
+      border-radius: 999px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .18s, border-color .18s, transform .18s;
+    }
+    .season-dial:hover {
+      background: rgba(58, 44, 34, 0.92);
+      border-color: #d48806;
+      transform: translateY(-1px);
+    }
+    .season-dial:active { transform: scale(.96); }
   </style>
   <script src="cat_walk_dialogues.js"></script>
 </head>
 <body>
 
   <div class="header">
-    <div class="title">LEIDEN CANAL · AUTUMN</div>
+    <div class="title" id="sceneTitle">LEIDEN CANAL · AUTUMN</div>
     <div class="subtitle">莱顿运河畔 · 散步的小猫、阿尔瓦与长椅上的赫尔曼</div>
   </div>
 
@@ -843,6 +870,7 @@
   <div class="game-wrapper" id="gameWrapper">
     <div class="canvas-container">
       <canvas id="gameCanvas" width="320" height="180"></canvas>
+      <button class="season-dial" id="seasonDial" title="点一下拨到下一季，右键回到今天">❄ 冬 · 第 1 天</button>
     </div>
     <div class="dialog-box" id="dialog" title="点击可切换上方/下方"></div>
   </div>
@@ -930,16 +958,155 @@
     let reviveRays = [];
 
     let scratchEffect = 0;
+    // =========================================================================
+    // 🍂❄🌸☀ 四季更迭系统
+    // 以现实日期为底账，十月三日（莱顿解放日）为冬季第一天；手动拨键可临时跳季
+    // =========================================================================
+    const SEASON_START = new Date(2026, 9, 3);
+    const SEASON_LEN = 90;
+    const SEASON_ORDER = ['winter', 'spring', 'summer', 'autumn'];
+    const SEASON_INFO = {
+      winter: { cn: '冬', en: 'WINTER', icon: '❄' },
+      spring: { cn: '春', en: 'SPRING', icon: '🌸' },
+      summer: { cn: '夏', en: 'SUMMER', icon: '☀' },
+      autumn: { cn: '秋', en: 'AUTUMN', icon: '🍂' }
+    };
+
+    const SEASON_PALETTE = {
+      winter: {
+        sky: ['#161f31', '#26344a', '#41536b', '#73839a', '#a3b1c2'],
+        bld: '#171d29', bldFar: '#1d2534',
+        water: '#101d27', waveA: '#1f3c4a', waveB: '#2b5464',
+        ground: '#8b97a8', edge: '#59636f',
+        stepDark: '#5a6472', stepLine: '#7d8898', stepHi: '#c6d2e1', stepHi2: '#a9b5c6'
+      },
+      spring: {
+        sky: ['#2b3a58', '#47597a', '#7a7c96', '#b2919a', '#e2bda6'],
+        bld: '#232032', bldFar: '#2a2739',
+        water: '#1a2f36', waveA: '#2f5257', waveB: '#427276',
+        ground: '#41423c', edge: '#212220',
+        stepDark: '#33342e', stepLine: '#5d5e54', stepHi: '#8f8f7f', stepHi2: '#7a7a6c'
+      },
+      summer: {
+        sky: ['#101f3a', '#1d3a5f', '#3a6b93', '#6c9cbd', '#a3c8da'],
+        bld: '#1a1f2b', bldFar: '#20283a',
+        water: '#0f2b36', waveA: '#255560', waveB: '#37798a',
+        ground: '#3a3a36', edge: '#1c1c1a',
+        stepDark: '#2b2b27', stepLine: '#55554c', stepHi: '#86867a', stepHi2: '#707066'
+      },
+      autumn: {
+        sky: ['#2b334a', '#424559', '#6d5854', '#946851', '#ba8358'],
+        bld: '#221e28', bldFar: '#26202c',
+        water: '#18242b', waveA: '#2c434f', waveB: '#3b5866',
+        ground: '#38363c', edge: '#1c1b1f',
+        stepDark: '#27262b', stepLine: '#4e4c54', stepHi: '#4e4c54', stepHi2: '#47454d'
+      }
+    };
+
+    let seasonOffset = 0;
+    try { seasonOffset = parseInt(localStorage.getItem('catwalk_season_offset') || '0', 10) || 0; } catch (e) { seasonOffset = 0; }
+
+    function seasonDay() {
+      const base = Math.floor((Date.now() - SEASON_START.getTime()) / 86400000);
+      return (((base + seasonOffset) % 360) + 360) % 360 + 1;
+    }
+    function seasonKey() {
+      return SEASON_ORDER[Math.floor((seasonDay() - 1) / SEASON_LEN)];
+    }
+    // 每季 90 天，再切成三段各 30 天：初冬/仲冬/冬末、初春/仲春/春末……
+    const PHASE_NAMES = {
+      winter: ['初冬', '仲冬', '冬末'],
+      spring: ['初春', '仲春', '春末'],
+      summer: ['初夏', '仲夏', '夏末'],
+      autumn: ['初秋', '仲秋', '秋末']
+    };
+    function seasonPhaseIndex() {
+      const d = ((seasonDay() - 1) % SEASON_LEN) + 1;
+      return Math.min(2, Math.floor((d - 1) / 30));
+    }
+    function seasonPhaseName() {
+      return PHASE_NAMES[seasonKey()][seasonPhaseIndex()];
+    }
+
+    // 粒子：冬雪 / 春瓣 / 夏萤 / 秋叶
     let leaves = [];
-    for (let i = 0; i < 16; i++) {
-      leaves.push({
-        x: Math.random() * 320,
-        y: Math.random() * 140,
-        speed: 0.3 + Math.random() * 0.4,
-        sway: Math.random() * Math.PI * 2,
-        color: Math.random() > 0.5 ? '#d97d27' : '#b3541e'
+    function makeParticle(k, anywhere) {
+      const p = { x: Math.random() * 320, y: anywhere ? Math.random() * 140 : -4, sway: Math.random() * Math.PI * 2, size: 1 };
+      if (k === 'winter') {
+        p.speed = 0.22 + Math.random() * 0.42;
+        p.size = Math.random() > 0.72 ? 2 : 1;
+        p.color = Math.random() > 0.5 ? '#ffffff' : '#dbeaf7';
+      } else if (k === 'spring') {
+        p.speed = 0.26 + Math.random() * 0.34;
+        p.size = 2;
+        p.color = Math.random() > 0.5 ? '#f7c8d8' : '#e8a7bd';
+      } else if (k === 'summer') {
+        p.speed = -(0.14 + Math.random() * 0.28);
+        p.size = 1;
+        p.color = Math.random() > 0.5 ? '#ffe9a3' : '#c9f5cd';
+      } else {
+        p.speed = 0.3 + Math.random() * 0.4;
+        p.size = 2;
+        p.color = Math.random() > 0.5 ? '#d97d27' : '#b3541e';
+      }
+      return p;
+    }
+    function initParticles() {
+      const k = seasonKey();
+      const wp = k === 'winter' ? seasonPhaseIndex() : -1;
+      const n = k === 'winter' ? (wp === 0 ? 26 : wp === 1 ? 40 : 54)
+              : k === 'spring' ? 22
+              : k === 'summer' ? 18 : 16;
+      leaves = [];
+      for (let i = 0; i < n; i++) leaves.push(makeParticle(k, true));
+    }
+    function updateSeasonParticles() {
+      const k = seasonKey();
+      leaves.forEach(l => {
+        l.y += l.speed;
+        l.x += Math.sin(l.sway += 0.035) * (k === 'winter' ? 0.8 : 0.55);
+        if (k === 'summer') {
+          if (l.y < 2) { l.y = 140; l.x = Math.random() * 320; }
+        } else if (l.y > 138) {
+          l.y = -4; l.x = Math.random() * 320;
+        }
+        if (l.x < -2) l.x += 322; else if (l.x > 322) l.x -= 322;
+        px(l.x, l.y, l.size, l.size, l.color);
       });
     }
+    function syncSeasonUI() {
+      const k = seasonKey(), info = SEASON_INFO[k];
+      const t = document.getElementById('sceneTitle');
+      if (t) t.textContent = 'LEIDEN CANAL · ' + info.en;
+      const d = document.getElementById('seasonDial');
+      if (d) {
+        d.textContent = info.icon + ' ' + info.cn + '·' + seasonPhaseName() + ' 第 ' + seasonDay() + ' 天';
+      }
+    }
+    function cycleSeason() {
+      const cur = seasonDay();
+      const idx = SEASON_ORDER.indexOf(seasonKey());
+      const next = (idx + 1) % 4;
+      seasonOffset += (next * SEASON_LEN + 1) - cur;
+      try { localStorage.setItem('catwalk_season_offset', String(seasonOffset)); } catch (e) {}
+      initParticles();
+      syncSeasonUI();
+    }
+    function resetSeason() {
+      seasonOffset = 0;
+      try { localStorage.setItem('catwalk_season_offset', '0'); } catch (e) {}
+      initParticles();
+      syncSeasonUI();
+    }
+
+    initParticles();
+    syncSeasonUI();
+    (function () {
+      const dial = document.getElementById('seasonDial');
+      if (!dial) return;
+      dial.addEventListener('click', cycleSeason);
+      dial.addEventListener('contextmenu', e => { e.preventDefault(); resetSeason(); });
+    })();
 
     // =========================================================================
     // 💬 对话文案引用区（已解耦拆分至 cat_walk_dialogues.js）
@@ -947,20 +1114,64 @@
     // =========================================================================
     const CD = window.CatWalkDialogues || {};
     const hermanDialogues = CD.hermanDialogues || [];
-    let hermanDialogIndex = 0;
 
-    // 赫尔曼被打怕之后的探头台词，以及被挠时的固定台词
-    const hermanFearDialogues = CD.hermanFearDialogues || [];
-    let hermanFearIndex = 0;
-    const hermanScratchFixed = CD.hermanScratchFixed || [];
-    let hermanFixedIndex = 0;
-    let scratchHitCount = 0;
+    // 探头看看的档位台词：赫尔曼按击倒次数越来越怂，阿尔瓦越来越纵容
+    const hermanPeekTiers = (CD.hermanPeekTiers || []).slice().sort((a, b) => a.min - b.min);
+    const alvaPeekTiers = (CD.alvaPeekTiers || []).slice().sort((a, b) => a.min - b.min);
+
+    // 通用档位取词器：count 未达最低档时用 baseLines 轮播
+    function makeTierPicker(tiers, baseLines) {
+      const tierIdx = tiers.map(() => 0);
+      let baseIdx = 0;
+      return function (count) {
+        let ti = -1;
+        for (let i = 0; i < tiers.length; i++) {
+          if (count >= tiers[i].min) ti = i;
+        }
+        if (ti < 0 || !(tiers[ti].lines || []).length) {
+          if (!baseLines.length) return '';
+          const baseText = baseLines[baseIdx % baseLines.length];
+          baseIdx++;
+          return baseText;
+        }
+        const lines = tiers[ti].lines;
+        const text = lines[tierIdx[ti] % lines.length];
+        tierIdx[ti]++;
+        return text;
+      };
+    }
+
+    const pickHermanPeek = makeTierPicker(hermanPeekTiers, hermanDialogues);
 
     const alvaDialogues = CD.alvaDialogues || [];
-    let alvaDialogIndex = 0;
+    const pickAlvaPeek = makeTierPicker(alvaPeekTiers, alvaDialogues);
 
     const scratchDialogues = CD.scratchDialogues || [];
     let scratchIndex = 0;
+
+    // 挠击档位：按累计挠击次数切换赫尔曼的态度
+    const scratchTiers = (CD.scratchTiers && CD.scratchTiers.length)
+      ? CD.scratchTiers.slice().sort((a, b) => a.min - b.min)
+      : [];
+    const tierLineIndex = scratchTiers.map(() => 0);
+
+    // 根据累计挠击次数取当前档位的一句台词
+    function getScratchTierText() {
+      if (!scratchTiers.length) {
+        const fallback = scratchDialogues[scratchIndex % scratchDialogues.length];
+        scratchIndex++;
+        return fallback;
+      }
+      let ti = 0;
+      for (let i = 0; i < scratchTiers.length; i++) {
+        if (totalScratchCount >= scratchTiers[i].min) ti = i;
+      }
+      const lines = scratchTiers[ti].lines || [];
+      if (!lines.length) return '';
+      const text = lines[tierLineIndex[ti] % lines.length];
+      tierLineIndex[ti]++;
+      return text;
+    }
 
     const bossScratchDialogues = CD.bossScratchDialogues || [];
     let bossScratchIndex = 0;
@@ -982,50 +1193,82 @@
     }
 
     function drawScene() {
-      // 1. 秋日黄昏渐变天空
-      px(0, 0, 320, 25, '#2b334a');
-      px(0, 25, 320, 30, '#424559');
-      px(0, 55, 320, 35, '#6d5854');
-      px(0, 90, 320, 30, '#946851');
-      px(0, 120, 320, 20, '#ba8358');
+      const P = SEASON_PALETTE[seasonKey()];
+      const kk = seasonKey();
+
+      // 1. 随季节变换的天空
+      px(0, 0, 320, 25, P.sky[0]);
+      px(0, 25, 320, 30, P.sky[1]);
+      px(0, 55, 320, 35, P.sky[2]);
+      px(0, 90, 320, 30, P.sky[3]);
+      px(0, 120, 320, 20, P.sky[4]);
+
+      // 冬夜零星雪云与星子
+      if (kk === 'winter') {
+        const tt = Date.now() * 0.0004;
+        for (let i = 0; i < 14; i++) {
+          const sx = (i * 47 + Math.sin(tt + i) * 3) % 320;
+          const sy = 6 + ((i * 13) % 46);
+          if (Math.sin(tt * 3 + i * 1.7) > -0.55) px(sx, sy, 1, 1, '#cfe2f5');
+        }
+      }
+      // 夏夜流萤般的暖光点
+      if (kk === 'summer') {
+        const tt = Date.now() * 0.0006;
+        for (let i = 0; i < 8; i++) {
+          px((i * 41 + Math.sin(tt + i) * 5) % 320, 8 + ((i * 11) % 30), 1, 1, '#ffe9a3');
+        }
+      }
 
       // 远景莱顿尖顶与老楼剪影
-      px(20, 75, 25, 45, '#221e28');
-      px(28, 60, 9, 15, '#221e28');
-      px(32, 50, 1, 10, '#221e28');
+      px(20, 75, 25, 45, P.bld);
+      px(28, 60, 9, 15, P.bld);
+      px(32, 50, 1, 10, P.bld);
 
-      px(70, 82, 35, 38, '#26202c');
-      px(140, 70, 30, 50, '#221e28');
-      px(150, 55, 10, 15, '#221e28');
+      px(70, 82, 35, 38, P.bldFar);
+      px(140, 70, 30, 50, P.bld);
+      px(150, 55, 10, 15, P.bld);
 
       // 运河水面
-      px(0, 138, 320, 42, '#18242b');
+      px(0, 138, 320, 42, P.water);
       const t = Date.now() * 0.002;
       for (let y = 142; y < 180; y += 4) {
         let waveX = (Math.sin(t + y) * 20 + 160) % 320;
-        px(waveX, y, 22, 1, '#2c434f');
-        px((waveX + 110) % 320, y + 2, 16, 1, '#3b5866');
+        px(waveX, y, 22, 1, P.waveA);
+        px((waveX + 110) % 320, y + 2, 16, 1, P.waveB);
+      }
+      // 冬日水面浮冰
+      if (kk === 'winter' && seasonPhaseIndex() === 2) {
+        px(40, 150, 14, 2, '#c3d3e2');
+        px(180, 162, 20, 2, '#b6c8d9');
+        px(260, 145, 10, 1, '#c3d3e2');
       }
 
       // 岸边石阶地面
-      px(0, 118, 320, 22, '#38363c');
-      px(0, 139, 320, 2, '#1c1b1f');
+      px(0, 118, 320, 22, P.ground);
+      px(0, 139, 320, 2, P.edge);
       for (let s = 0; s < 320; s += 16) {
-        px(s, 119, 1, 20, '#27262b');
-        px(s + 2, 120, 6, 1, '#4e4c54');
-        px(s + 8, 128, 5, 1, '#47454d');
+        px(s, 119, 1, 20, P.stepDark);
+        px(s + 2, 120, 6, 1, P.stepLine);
+        px(s + 8, 128, 5, 1, P.stepHi2);
+      }
+      // 冬雪覆盖的石板缝
+      if (kk === 'winter') {
+        for (let s = 2; s < 320; s += 16) {
+          px(s + 1, 118, 12, 1, '#e6eff9');
+          px(s + 3, 119, 7, 1, '#d2dfee');
+        }
+      }
+      // 春日石缝里的小草
+      if (kk === 'spring') {
+        for (let s = 6; s < 320; s += 37) {
+          px(s, 117, 1, 2, '#6f9a5c');
+          px(s + 2, 116, 1, 3, '#86b06b');
+        }
       }
 
-      // 飘落秋叶
-      leaves.forEach(l => {
-        l.y += l.speed;
-        l.x += Math.sin(l.sway += 0.04) * 0.5;
-        if (l.y > 136) {
-          l.y = 10;
-          l.x = Math.random() * 320;
-        }
-        px(l.x, l.y, 2, 2, l.color);
-      });
+      // 飘落的雪 / 花瓣 / 流萤 / 秋叶
+      updateSeasonParticles();
 
       // 木制长椅
       const bx = bench.x;
@@ -1036,6 +1279,12 @@
       px(bx - 6, by + 12, 50, 2, '#3b2212');
       px(bx - 3, by + 12, 2, 7, '#1a191b');
       px(bx + 39, by + 12, 2, 7, '#1a191b');
+
+      // 长椅上积的一层薄雪
+      if (seasonKey() === 'winter') {
+        px(bx - 6, by + 9, 50, 1, '#eaf3fc');
+        px(bx - 4, by, 46, 1, '#dfeaf6');
+      }
 
       // 绘制赫尔曼
       drawPixelHerman(bx + 18, by + 1);
@@ -1860,6 +2109,9 @@ dialog.addEventListener('click', () => {
     let totalKoCount = parseInt(localStorage.getItem('cat_ko_count') || '0', 10);
     let totalBossKoCount = parseInt(localStorage.getItem('cat_boss_ko_count') || '0', 10);
     let totalDiamondKoCount = parseInt(localStorage.getItem('cat_diamond_ko_count') || '0', 10);
+    // 累计挠击次数：决定赫尔曼的档位态度（轻视→道歉→害怕→麻木→乐在其中）
+    let totalScratchCount = parseInt(localStorage.getItem('cat_scratch_count') || '0', 10);
+    if (!Number.isFinite(totalScratchCount) || totalScratchCount < 0) totalScratchCount = 0;
 
     // 🐟 小鱼干：散步捡到、击倒赫尔曼掉一点，存在本地，以后用来买点心
     let driedFish = parseInt(localStorage.getItem('cat_dried_fish') || '20', 10);
@@ -2335,7 +2587,7 @@ dialog.addEventListener('click', () => {
 
       // ---------- 抬头 ----------
       c.textAlign = 'left';
-      cardSpaced(c, 'LEIDEN CANAL · AUTUMN', W / 2, 76, `14px ${CARD_SANS}`, CARD_GOLD, 5);
+      cardSpaced(c, 'LEIDEN CANAL · ' + SEASON_INFO[seasonKey()].en, W / 2, 76, `14px ${CARD_SANS}`, CARD_GOLD, 5);
       c.textAlign = 'center';
       c.font = `50px ${CARD_SERIF}`;
       c.fillStyle = CARD_TEXT;
@@ -2608,7 +2860,7 @@ dialog.addEventListener('click', () => {
         const alvaMeows = [
           "呼噜呼噜……（用软乎乎的小脑门亲昵地蹭阿尔瓦的裤腿）",
           "喵呜~（仰着小圆脸冲阿尔瓦叫，尾巴尖轻轻勾住大衣下摆）",
-          "阿尔瓦教授今天辛苦啦，本喵给你踩奶~"
+          "阿尔瓦今天看论文辛苦啦，本喵给你踩奶~"
         ];
         meowText = alvaMeows[Math.floor(Math.random() * alvaMeows.length)];
       } else {
@@ -2627,17 +2879,10 @@ dialog.addEventListener('click', () => {
 
       if (distAlva < 38) {
         alva.heartTimer = 30;
-        showDialog(alvaDialogues[alvaDialogIndex % alvaDialogues.length]);
-        alvaDialogIndex++;
+        showDialog(pickAlvaPeek(totalKoCount));
       } else if (distHerman < 45) {
-        // 被打败过几次以后，赫尔曼一看见小猫探头就发怵
-        if (totalKoCount >= 3 && hermanFearDialogues.length && Math.random() < 0.5) {
-          showDialog(hermanFearDialogues[hermanFearIndex % hermanFearDialogues.length]);
-          hermanFearIndex++;
-        } else {
-          showDialog(hermanDialogues[hermanDialogIndex % hermanDialogues.length]);
-          hermanDialogIndex++;
-        }
+        // 击倒次数越多，赫尔曼见小猫探头的反应越离谱
+        showDialog(pickHermanPeek(totalKoCount));
       } else {
         catMeow();
       }
@@ -2741,16 +2986,9 @@ dialog.addEventListener('click', () => {
             showDialog(`【暴击！-${damage} HP】` + bossText);
             bossScratchIndex++;
           } else {
-            scratchHitCount++;
-            if (hermanScratchFixed.length && scratchHitCount % 3 === 0) {
-              const fixedText = hermanScratchFixed[hermanFixedIndex % hermanScratchFixed.length];
-              hermanFixedIndex++;
-              showDialog(`【暴击！-${damage} HP】` + fixedText);
-            } else {
-              const baseText = scratchDialogues[scratchIndex % scratchDialogues.length];
-              showDialog(`【暴击！-${damage} HP】` + baseText);
-              scratchIndex++;
-            }
+            totalScratchCount++;
+            try { localStorage.setItem('cat_scratch_count', totalScratchCount); } catch (e) {}
+            showDialog(`【暴击！-${damage} HP】` + getScratchTierText());
           }
         }
       } else {
@@ -2803,8 +3041,7 @@ dialog.addEventListener('click', () => {
       // 点阿尔瓦
       if (Math.abs(clickX - alva.x) < 18 && Math.abs(clickY - (alva.y - 18)) < 24) {
         alva.heartTimer = 30;
-        showDialog(alvaDialogues[alvaDialogIndex % alvaDialogues.length]);
-        alvaDialogIndex++;
+        showDialog(pickAlvaPeek(totalKoCount));
         return;
       }
 
