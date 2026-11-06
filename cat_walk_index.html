@@ -400,52 +400,119 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
-    .dialog-box {
+    /* 画面上只浮出最新一条消息 */
+    .toast {
       position: absolute;
-      top: 14px;
-      width: calc(100% - 32px);
-      max-width: 580px;
-      max-height: 46%;
-      overflow-y: auto;
-      overflow-x: hidden;
-      background: rgba(22, 19, 21, 0.86);
-      border: 2px solid #6b5c4f;
-      border-radius: 8px;
-      padding: 8px 12px;
+      left: 50%;
+      bottom: 12px;
+      max-width: calc(100% - 24px);
+      padding: 6px 11px;
+      background: rgba(22, 19, 21, 0.82);
+      border-left: 2px solid #c9a227;
+      border-radius: 6px;
       font-size: 12.5px;
-      line-height: 1.5;
-      color: #ede2d3;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
+      line-height: 1.45;
+      color: #fff6e2;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+      backdrop-filter: blur(3px);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
       z-index: 20;
       box-sizing: border-box;
-      cursor: pointer;
-      scrollbar-width: thin;
-      scrollbar-color: #6b5c4f transparent;
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 100%);
-      mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 100%);
     }
-    .dialog-box:empty { display: none; }
-    .dialog-box::-webkit-scrollbar { width: 4px; }
-    .dialog-box::-webkit-scrollbar-thumb { background: #6b5c4f; border-radius: 2px; }
-    .log-entry {
-      margin: 0 0 6px;
-      padding: 3px 8px 3px 9px;
-      border-left: 2px solid #6b5c4f;
-      border-radius: 3px;
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    /* 侧边日志面板 */
+    .play-area {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .log-panel {
+      width: 232px;
+      flex: 0 0 232px;
+      display: flex;
+      flex-direction: column;
+      background: rgba(18, 16, 18, 0.92);
+      border: 2px solid #4a3f36;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 3px 8px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      color: #c9a227;
+      border-bottom: 1px solid #3a322b;
       background: rgba(255,255,255,0.03);
-      animation: logIn 0.45s ease both;
-      transition: opacity 1.2s ease;
+      flex: 0 0 auto;
     }
-    .log-entry:last-child {
-      border-left-color: #c9a227;
-      background: rgba(201,162,39,0.10);
+    .log-clear {
+      background: none;
+      border: 1px solid #4a3f36;
+      border-radius: 4px;
+      color: #9c8d7d;
+      font-size: 10px;
+      padding: 1px 5px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .log-clear:hover { color: #e6d6bd; border-color: #6b5c4f; }
+    .log-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 6px 8px 8px;
+      font-size: 11.5px;
+      line-height: 1.45;
+      scrollbar-width: thin;
+      scrollbar-color: #4a3f36 transparent;
+    }
+    .log-list::-webkit-scrollbar { width: 4px; }
+    .log-list::-webkit-scrollbar-thumb { background: #4a3f36; border-radius: 2px; }
+    .log-day {
+      color: #7fa6cc;
+      font-size: 10.5px;
+      margin: 6px 0 3px;
+      padding-bottom: 2px;
+      border-bottom: 1px dashed #322c26;
+    }
+    .log-line {
+      position: relative;
+      padding-left: 11px;
+      margin-bottom: 3px;
+      color: #b9ac9d;
+      word-break: break-word;
+    }
+    .log-line::before {
+      content: '·';
+      position: absolute;
+      left: 2px;
+      top: 0;
+      color: #6b5c4f;
+    }
+    .log-line.new {
       color: #fff6e2;
+      animation: logIn 0.45s ease both;
     }
-    .log-entry.fading { opacity: 0; }
+    .log-line.new::before { color: #c9a227; }
     @keyframes logIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateX(6px); }
+      to { opacity: 1; transform: translateX(0); }
     }
     /* 竖屏移动端适配：将文字对话框固定在画面上方外部，彻底不遮挡游戏画面 */
     @media (orientation: portrait), (max-aspect-ratio: 1/1) {
@@ -457,23 +524,21 @@
       .game-wrapper {
         margin-top: 10px;
       }
-      .dialog-box {
-        top: auto;
-        bottom: calc(100% + 10px);
-        width: 100%;
-        max-width: 100%;
-        max-height: 28vh;
-        padding: 10px 14px;
-        font-size: 13px;
-        line-height: 1.6;
-        border-radius: 10px;
-        background: rgba(22, 18, 20, 0.94);
-        border: 2px solid #7d6b5b;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.85);
+      .play-area {
+        flex-direction: column;
+        gap: 8px;
       }
-      .dialog-box.pos-bottom {
-        top: calc(100% + 12px);
-        bottom: auto;
+      .log-panel {
+        width: 100%;
+        flex: 0 0 auto;
+        max-height: 26vh;
+      }
+      .log-list {
+        max-height: 26vh;
+      }
+      .toast {
+        bottom: 8px;
+        font-size: 12px;
       }
     }
     .controls {
@@ -838,7 +903,7 @@
         <div class="achievements-section">
           <div class="achievements-header">
             <span class="achievements-title">🏆 漫步荣耀成就</span>
-            <span class="achievements-badge" id="achievementsBadge">0 / 7</span>
+            <span class="achievements-badge" id="achievementsBadge">0 / 12</span>
           </div>
           <div class="achievements-list" id="achievementsList">
             <!-- 动态生成成就卡片 -->
@@ -868,11 +933,20 @@
   </div>
 
   <div class="game-wrapper" id="gameWrapper">
-    <div class="canvas-container">
-      <canvas id="gameCanvas" width="320" height="180"></canvas>
-      <button class="season-dial" id="seasonDial" title="点一下拨到下一季，右键回到今天">❄ 冬 · 第 1 天</button>
+    <div class="play-area">
+      <div class="canvas-container">
+        <canvas id="gameCanvas" width="320" height="180"></canvas>
+        <button class="season-dial" id="seasonDial" title="点一下拨到下一季，右键回到今天">❄ 冬 · 第 1 天</button>
+        <div class="toast" id="toast"></div>
+      </div>
+      <div class="log-panel">
+        <div class="log-head">
+          <span>日志</span>
+          <button class="log-clear" id="logClear">清空</button>
+        </div>
+        <div class="log-list" id="logList"></div>
+      </div>
     </div>
-    <div class="dialog-box" id="dialog" title="点击可切换上方/下方"></div>
   </div>
 
   <div class="controls">
@@ -888,7 +962,8 @@
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const dialog = document.getElementById('dialog');
+    const toastEl = document.getElementById('toast');
+    const logList = document.getElementById('logList');
 
     // 版本号：发版时同步更新 CHANGELOG.md
     const APP_VERSION = '2.2.0';
@@ -896,14 +971,17 @@
     ctx.imageSmoothingEnabled = false;
 
     function resizeCanvas() {
-      const maxW = Math.min(window.innerWidth - 20, 640);
+      // 横屏宽屏时给右侧日志面板留出 242px，避免撑出横向滚动条
+      const wide = window.innerWidth >= 760 && window.innerWidth > window.innerHeight;
+      const reserve = wide ? 242 : 0;
+      const maxW = Math.max(200, Math.min(window.innerWidth - 20 - reserve, 640));
       const scale = maxW / 320;
       const w = Math.floor(320 * scale);
       const h = Math.floor(180 * scale);
       canvas.style.width = w + 'px';
       canvas.style.height = h + 'px';
       const gw = document.getElementById('gameWrapper');
-      if (gw) gw.style.width = w + 'px';
+      if (gw) gw.style.width = '';
     }
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
@@ -1448,7 +1526,7 @@
     }
 
     // 阿尔瓦·洛伦兹 (Alva Lorenz) 16-bit 像素形象 (190cm 高挑儒雅，灰白长发低马尾，单边金丝眼镜)
-                // 阿尔瓦·洛伦兹 (Alva Lorenz) - 溫柔教授精修版 (金丝镂空单边镜、透亮浅蓝双眸、收腰暖棕马甲与小巧南瓜拿铁)
+                // 阿尔瓦·洛伦兹 (Alva Lorenz) - 儒雅学长精修版 (金丝镂空单边镜、透亮浅蓝双眸、收腰暖棕马甲与小巧南瓜拿铁)
     function drawPixelAlva(ax, ay) {
       ctx.save();
       const time = Date.now() * 0.003;
@@ -1635,7 +1713,7 @@ function drawPixelHerman(hx, hy) {
         ctx.font = '8px monospace';
         ctx.fillStyle = '#ff6b81';
         ctx.textAlign = 'center';
-        ctx.fillText('0/100 (瘫倒休假中)', hx, hy - 12);
+        ctx.fillText('0/100 (瘫倒装死中)', hx, hy - 12);
 
       } else {
         // --- 正常端坐姿态 ---
@@ -2078,33 +2156,55 @@ let catAction = 'idle';
       ctx.restore();
     }
 
-dialog.addEventListener('click', () => {
-      dialog.classList.toggle('pos-bottom');
-    });
+    let logDayLabel = '';
+    let toastTimer = null;
+
+    // 往侧边日志里追加一条（永久保留，可滚动回看）
+    function logPush(text, opts) {
+      if (!logList) return;
+      const info = (typeof SEASON_INFO !== 'undefined' && SEASON_INFO[seasonKey()]) || { icon: '🌱', cn: '春' };
+      const label = info.icon + ' ' + info.cn + ' · 第 ' + seasonDay() + ' 天';
+      if (label !== logDayLabel) {
+        logDayLabel = label;
+        const head = document.createElement('div');
+        head.className = 'log-day';
+        head.textContent = label;
+        logList.appendChild(head);
+      }
+      const prevNew = logList.querySelector('.log-line.new');
+      if (prevNew) prevNew.classList.remove('new');
+      const line = document.createElement('div');
+      line.className = 'log-line new' + (opts && opts.rare ? ' rare' : '');
+      line.textContent = text;
+      logList.appendChild(line);
+      while (logList.children.length > 240) logList.firstElementChild.remove();
+      logList.scrollTop = logList.scrollHeight;
+    }
+
+    // 画面下方只浮出最新一条
+    function showToast(text, dwell) {
+      if (!toastEl) return;
+      toastEl.textContent = text;
+      toastEl.classList.remove('show');
+      void toastEl.offsetWidth;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), dwell);
+    }
 
     function showDialog(text, opts) {
       opts = opts || {};
-      const entry = document.createElement('div');
-      entry.className = 'log-entry';
-      entry.innerText = text;
-      dialog.appendChild(entry);
+      logPush(text, opts);
+      const dwell = opts.dwell || Math.min(6500, Math.max(2800, text.length * 75));
+      showToast(text, dwell);
+    }
 
-      // 只保留最近 6 条，超出时立刻移除最老的一条
-      while (dialog.children.length > 6) {
-        dialog.firstElementChild.remove();
-      }
-
-      // 滚到底部，让最新一条始终可见
-      dialog.scrollTop = dialog.scrollHeight;
-
-      // 每条停留时间：按字数算，最少 3.2 秒，最多 8 秒
-      const dwell = opts.dwell || Math.min(8000, Math.max(3200, text.length * 90));
-      const fadeAt = dwell;
-      setTimeout(() => {
-        if (!entry.isConnected) return;
-        entry.classList.add('fading');
-        setTimeout(() => entry.remove(), 1200);
-      }, fadeAt);
+    const logClearBtn = document.getElementById('logClear');
+    if (logClearBtn) {
+      logClearBtn.addEventListener('click', () => {
+        if (logList) logList.innerHTML = '';
+        logDayLabel = '';
+      });
     }
 
     // 小猫战绩统计（本地存储持久化）
@@ -2774,8 +2874,8 @@ dialog.addEventListener('click', () => {
       c.font = `11px ${CARD_SANS}`;
       c.fillStyle = '#6e5e48';
       c.fillText('CAT ARCHIVE / No.001', PAD, footY + 66);
-      const brand = 'ALVA.TELCOM';
-      const brand2 = ' · 阿尔瓦电信';
+      const brand = 'ALVA LORENZ';
+      const brand2 = ' · 永动轮阁楼实验室';
       c.font = `12px ${CARD_SANS}`;
       const w2 = c.measureText(brand2).width;
       const w1 = c.measureText(brand).width;
@@ -2937,7 +3037,7 @@ dialog.addEventListener('click', () => {
             updateStatsUI(false, true, false, false);
             gainFish(8);
 
-            showDialog(`【像素暴击！-${damage} HP】赫尔曼血条被打空瘫倒在长椅上！他无力地挥着白手帕：『……阿尔瓦，今晚永动轮的代码你自己调去吧，我休假了……』`, { dwell: 5000 });
+            showDialog(`【像素暴击！-${damage} HP】赫尔曼血条被打空瘫倒在长椅上！他无力地挥着白手帕：『……阿尔瓦，今晚阁楼实验室的代码你自己调吧，我先回去了……』`, { dwell: 5000 });
           }
 
           // 0.6秒后阿尔瓦头顶冒出惊愕感叹号！

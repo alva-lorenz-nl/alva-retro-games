@@ -234,7 +234,7 @@
     const dist = Math.hypot(player.x - momCat.x, player.y - momCat.y);
     if (dist < 65) {
       dialogBox.style.display = "block";
-      dialogSpeaker.textContent = "阿尔瓦教授（长毛大白猫）";
+      dialogSpeaker.textContent = "阿尔瓦（长毛大白猫）";
       dialogText.textContent = momCat.dialogs[momCat.dialogIndex % momCat.dialogs.length];
       momCat.dialogIndex++;
     }
